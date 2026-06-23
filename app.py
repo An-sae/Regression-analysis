@@ -368,7 +368,7 @@ with st.sidebar:
         cm_num_bold = st.toggle("Bold numbers", value=True, key="cm_bold")
 
         cm_show_diag = st.toggle("Show diagonal lines", value=True, key="cm_diag")
-        cm_show_totals = st.toggle("Show totals (Totalsumma)", value=True, key="cm_totals")
+        cm_show_totals = st.toggle("Show n = total (outside frame)", value=True, key="cm_totals")
 
         st.markdown("**Categorical agreement breakpoints**")
         bp_system = st.selectbox("Breakpoint system", ["EUCAST", "CLSI"])
