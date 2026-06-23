@@ -6,7 +6,7 @@ A professional, self-contained web application for method-comparison studies usi
 
 | Feature | Detail |
 |---|---|
-| **Regression** | Passing–Bablok slope & intercept with 95 % rank-based CIs |
+| **Regression** | Passing–Bablok and Deming slope & intercept with 95 % rank-based CIs |
 | **Correlation** | Pearson r, R², Bland–Altman bias & limits of agreement |
 | **Plot** | Interactive Plotly scatter with identity line, regression line, and annotation box |
 | **Export** | CSV results, PNG figure, self-contained HTML report |
