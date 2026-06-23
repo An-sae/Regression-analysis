@@ -1,4 +1,4 @@
-# Passing–Bablok Regression Tool
+# Deming and Passing–Bablok Regression Tool
 
 A professional, self-contained web application for method-comparison studies using **Passing–Bablok and Deming regression** — a robust, non-parametric technique endorsed by CLSI EP09 for evaluating analytical method equivalence.
 
