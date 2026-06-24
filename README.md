@@ -1,12 +1,12 @@
-# Deming and Passing–Bablok Regression Tool
+# Passing–Bablok Regression Tool
 
-A professional, self-contained web application for method-comparison studies using **Passing–Bablok and Deming regression** — a robust, non-parametric technique endorsed by CLSI EP09 for evaluating analytical method equivalence.
+A professional, self-contained web application for method-comparison studies using **Passing–Bablok regression** — a robust, non-parametric technique endorsed by CLSI EP09 for evaluating analytical method equivalence.
 
 ## Features
 
 | Feature | Detail |
 |---|---|
-| **Regression** | Passing–Bablok and Deming slope & intercept with 95 % rank-based CIs |
+| **Regression** | Passing–Bablok slope & intercept with 95 % rank-based CIs |
 | **Correlation** | Pearson r, R², Bland–Altman bias & limits of agreement |
 | **Plot** | Interactive Plotly scatter with identity line, regression line, and annotation box |
 | **Export** | CSV results, PNG figure, self-contained HTML report |
