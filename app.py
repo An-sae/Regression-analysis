@@ -50,7 +50,62 @@ def _pa(s):
 def _ca(s):
     v=_pa(s); return None if v is None else int(v)
 
-def _read_excel(raw, sheet, hdr, xc, yc):
+def _apply_filter(df, exclude_cols, key_prefix):
+    """
+    Show optional row-filter UI for categorical columns.
+    Returns a filtered copy of df (or original if no filter applied).
+    exclude_cols: column names already used as x/y (skip those).
+    key_prefix: unique string to avoid widget key collisions.
+    """
+    # Find columns that are text/categorical and have reasonable cardinality.
+    # Accept both 'object' and 'str' (StringDtype) dtypes.
+    cat_cols = []
+    for c in df.columns:
+        if c in exclude_cols:
+            continue
+        try:
+            is_text = (df[c].dtype == object or
+                       pd.api.types.is_string_dtype(df[c]) or
+                       str(df[c].dtype) in ("string","object"))
+        except Exception:
+            is_text = False
+        if is_text:
+            n_unique = df[c].nunique(dropna=True)
+            if 1 < n_unique <= 200:
+                cat_cols.append(c)
+
+    if not cat_cols:
+        return df   # nothing to filter on
+
+    st.markdown("**Filter rows (optional)**")
+    filter_col = st.selectbox(
+        "Filter by column", ["— no filter —"] + cat_cols,
+        key=f"{key_prefix}_fcol",
+    )
+    if filter_col == "— no filter —":
+        return df
+
+    unique_vals = sorted(df[filter_col].dropna().unique().tolist(), key=str)
+    selected = st.multiselect(
+        f"Keep rows where {filter_col} =",
+        options=unique_vals,
+        default=unique_vals,   # all selected by default — never crashes
+        key=f"{key_prefix}_fval",
+    )
+    if not selected:
+        st.warning("No values selected — using all rows.")
+        return df
+
+    filtered = df[df[filter_col].isin(selected)].copy()
+    n_kept   = len(filtered)
+    n_total  = len(df)
+    preview  = ", ".join(str(v) for v in selected[:3])
+    if len(selected) > 3:
+        preview += f" … (+{len(selected)-3} more)"
+    st.caption(f"Using **{n_kept}** of {n_total} rows — {filter_col}: {preview}")
+    return filtered
+
+
     df=pd.read_excel(BytesIO(raw), sheet_name=sheet, header=0 if hdr else None)
     df.columns=[str(c) for c in df.columns]
     def _col(c): return pd.to_numeric(df[c].astype(str).str.replace(",","."),errors="coerce").values.astype(float)
@@ -117,7 +172,14 @@ with st.sidebar:
                     if len(_cols)>=2:
                         _xc=st.selectbox("Reference column (x)",_cols,0,key="xce")
                         _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="yce")
-                        _x_sid,_y_sid=_read_excel(_rb,_ss,_hdr,_xc,_yc)
+                        # Load full sheet, apply optional filter, extract x/y
+                        _full=pd.read_excel(BytesIO(_rb),sheet_name=_ss,
+                                            header=0 if _hdr else None)
+                        _full.columns=[str(c) for c in _full.columns]
+                        _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="xe")
+                        def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+                        _x_sid=_tonum(_full[_xc])
+                        _y_sid=_tonum(_full[_yc])
                     else:
                         _sid_err="Sheet needs at least 2 columns."
                 else:
@@ -136,7 +198,17 @@ with st.sidebar:
                     _cols=list(_pv.columns)
                     _xc=st.selectbox("Reference column (x)",_cols,0,key="xcc")
                     _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="ycc")
-                    _x_sid,_y_sid=_read_csv(_rb,_hdr,_xc,_yc)
+                    # Load full CSV, apply optional filter, extract x/y
+                    _full=pd.read_csv(BytesIO(_rb), header=0 if _hdr else None,
+                                      sep=None, engine="python", decimal=",")
+                    if _full.select_dtypes(include=[np.number]).shape[1]<2:
+                        _full=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
+                                          sep=None,engine="python")
+                    _full.columns=[str(c) for c in _full.columns]
+                    _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="ce")
+                    def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+                    _x_sid=_tonum(_full[_xc])
+                    _y_sid=_tonum(_full[_yc])
             except Exception as e:
                 _sid_err=str(e)
     else:
