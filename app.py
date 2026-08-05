@@ -345,19 +345,144 @@ if _sid_err:
 def _get_data():
     if input_mode=="📂 Upload file":
         if uploaded_file is None:
-            st.info("👈 Upload a CSV or Excel file in the sidebar.")
-            with st.expander("📄 Expected format"):
-                st.dataframe(pd.DataFrame({"reference":[10.2,15.7,8.3],
-                                           "candidate":[10.5,16.1,8.0]}),
-                             use_container_width=True)
-            return None,None
+            # ── Welcome / landing page ────────────────────────────────────────
+            st.markdown("""
+## Welcome to the Method Comparison Tool
+
+A professional tool for comparing two analytical measurement methods in
+clinical microbiology and clinical chemistry.
+Select an analysis type in the sidebar, then upload your data or paste it directly.
+""")
+
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.markdown("""
+**📈 Regression analysis**
+- Passing–Bablok (non-parametric)
+- Deming — ordinary or weighted
+- 95 % confidence interval band
+- Bland–Altman plot (absolute or %)
+""")
+            with col_b:
+                st.markdown("""
+**🔢 Confusion matrix**
+- Zone diameter agreement grid
+- Essential agreement ±1 and ±2 mm
+- Categorical agreement (EUCAST/CLSI)
+- Very major and major error rates
+""")
+            with col_c:
+                st.markdown("""
+**⚙️ Customisation & export**
+- Filter rows by organism, antibiotic…
+- Adjustable colours, titles, axes
+- PNG (150/300/600 dpi) and SVG
+- CSV results and HTML report
+""")
+
+            st.divider()
+
+            # ── Expected data format ──────────────────────────────────────────
+            st.subheader("📄 Expected data format")
+            st.markdown("""
+Your file should contain **at least two numeric columns** — one for the
+reference method and one for the candidate method. Additional columns
+(organism name, antibiotic, lab site, etc.) are supported and can be used
+to filter rows before analysis.
+""")
+
+            fcol1, fcol2 = st.columns(2)
+            with fcol1:
+                st.markdown("**Minimal format** (two columns):")
+                st.dataframe(pd.DataFrame({
+                    "Reference (mm)": [18, 20, 22, 19, 24, 21],
+                    "Candidate (mm)": [19, 20, 23, 20, 25, 22],
+                }), use_container_width=True, hide_index=True)
+
+            with fcol2:
+                st.markdown("**With metadata** (filterable):")
+                st.dataframe(pd.DataFrame({
+                    "Species":        ["E. coli","E. coli","K. pneumoniae","E. coli","S. aureus","K. pneumoniae"],
+                    "Reference (mm)": [18, 20, 22, 19, 24, 21],
+                    "Candidate (mm)": [19, 20, 23, 20, 25, 22],
+                }), use_container_width=True, hide_index=True)
+
+            st.markdown("""
+**Accepted input formats**
+- Excel (.xlsx, .xls) — any sheet, with or without a header row
+- CSV — comma, semicolon or tab-separated; comma or point as decimal
+- Paste directly from Excel — copy two columns and paste in the sidebar
+
+> **Tip:** If your file has a column like "Species" or "Antibiotic",
+> a filter will appear automatically after you select your data columns,
+> so you can analyse one organism at a time without editing the file.
+""")
+
+            st.divider()
+
+            # ── Acceptability thresholds ──────────────────────────────────────
+            st.subheader("📋 Acceptability criteria")
+            st.markdown("""
+For **zone diameter comparison** (confusion matrix), the following
+thresholds are used by EUCAST and CLSI to verify method equivalence:
+""")
+            st.dataframe(pd.DataFrame({
+                "Metric":          ["Essential Agreement ±2 mm",
+                                    "Categorical Agreement",
+                                    "Very Major Error (S→R)",
+                                    "Major Error (R→S)"],
+                "EUCAST":          ["≥ 90 %", "≥ 90 %",
+                                    "≤ 3 % of S isolates",
+                                    "≤ 3 % of R isolates"],
+                "CLSI":            ["≥ 90 %", "≥ 90 %",
+                                    "≤ 1.5 %", "≤ 3 %"],
+            }), use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # ── References ────────────────────────────────────────────────────
+            st.subheader("📚 References")
+            st.markdown("""
+1. Passing H, Bablok W. A new biometrical procedure for testing the
+   equality of measurements from two different analytical methods.
+   *J Clin Chem Clin Biochem.* 1983;21(11):709–720.
+   https://doi.org/10.1515/cclm.1983.21.11.709
+
+2. Deming WE. *Statistical Adjustment of Data.* New York: Wiley; 1943.
+
+3. Linnet K. Estimation of the linear relationship between the measurements
+   of two methods with proportional errors.
+   *Stat Med.* 1990;9(12):1463–1473.
+   https://doi.org/10.1002/sim.4780091210
+
+4. Bland JM, Altman DG. Statistical methods for assessing agreement between
+   two methods of clinical measurement.
+   *Lancet.* 1986;327(8476):307–310.
+   https://doi.org/10.1016/S0140-6736(86)90837-8
+
+5. EUCAST. Disk Diffusion Method for Antimicrobial Susceptibility Testing.
+   *EUCAST Disk Diffusion Implementation Guide v10.0.* 2023.
+   https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/
+
+6. CLSI. Verification of Commercial Microbial Identification and
+   Antimicrobial Susceptibility Testing Systems.
+   *CLSI document M52.* Wayne, PA: CLSI; 2015.
+
+7. CLSI. Method Comparison and Bias Estimation Using Patient Samples.
+   *CLSI document EP09c.* Wayne, PA: CLSI; 2018.
+
+8. Carstensen B. *Comparing Clinical Measurement Methods: A Practical Guide.*
+   Chichester: Wiley; 2010.
+""")
+            return None, None
+
         if _x_sid is None or _y_sid is None:
             st.info("👈 Select the columns to use in the sidebar.")
             return None,None
         return _x_sid, _y_sid
     else:
         if not pasted_text or not pasted_text.strip():
-            st.info("👈 Paste your data in the sidebar.")
+            st.info("👈 Paste your data in the sidebar to get started.")
             return None,None
         try:
             _df=parse_pasted(pasted_text)
