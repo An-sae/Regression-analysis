@@ -165,7 +165,10 @@ with st.sidebar:
                     _hdr= _hc=="Yes (first row)"
                     _pv = pd.read_excel(BytesIO(_rb),sheet_name=_ss,
                                         header=0 if _hdr else None, nrows=5)
-                    _pv.columns=[str(c) for c in _pv.columns]
+                    if not _hdr:
+                        _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
+                    else:
+                        _pv.columns=[str(c) for c in _pv.columns]
                     st.caption("Preview (first 5 rows):")
                     st.dataframe(_pv, use_container_width=True)
                     _cols=list(_pv.columns)
@@ -175,7 +178,10 @@ with st.sidebar:
                         # Load full sheet, apply optional filter, extract x/y
                         _full=pd.read_excel(BytesIO(_rb),sheet_name=_ss,
                                             header=0 if _hdr else None)
-                        _full.columns=[str(c) for c in _full.columns]
+                        if not _hdr:
+                            _full.columns = [f"Column {i+1}" for i in range(len(_full.columns))]
+                        else:
+                            _full.columns=[str(c) for c in _full.columns]
                         _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="xe")
                         def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
                         _x_sid=_tonum(_full[_xc])
@@ -192,7 +198,10 @@ with st.sidebar:
                     if _pv.select_dtypes(include=[np.number]).shape[1]<2:
                         _pv=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
                                         sep=None,engine="python")
-                    _pv.columns=[str(c) for c in _pv.columns]
+                    if not _hdr:
+                        _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
+                    else:
+                        _pv.columns=[str(c) for c in _pv.columns]
                     st.caption("Preview (first 5 rows):")
                     st.dataframe(_pv.head(), use_container_width=True)
                     _cols=list(_pv.columns)
@@ -204,7 +213,10 @@ with st.sidebar:
                     if _full.select_dtypes(include=[np.number]).shape[1]<2:
                         _full=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
                                           sep=None,engine="python")
-                    _full.columns=[str(c) for c in _full.columns]
+                    if not _hdr:
+                        _full.columns = [f"Column {i+1}" for i in range(len(_full.columns))]
+                    else:
+                        _full.columns=[str(c) for c in _full.columns]
                     _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="ce")
                     def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
                     _x_sid=_tonum(_full[_xc])
@@ -347,132 +359,60 @@ def _get_data():
         if uploaded_file is None:
             # ── Welcome / landing page ────────────────────────────────────────
             st.markdown("""
-## Welcome to the Method Comparison Tool
+## Method Comparison Tool
 
-A professional tool for comparing two analytical measurement methods in
-clinical microbiology and clinical chemistry.
-Select an analysis type in the sidebar, then upload your data or paste it directly.
+A simple tool for comparing two analytical measurement methods in clinical microbiology and clinical chemistry.
+👈 Select an analysis type in the sidebar, then upload your data or paste it directly.
 """)
 
             col_a, col_b, col_c = st.columns(3)
             with col_a:
                 st.markdown("""
-**📈 Regression analysis**
-- Passing–Bablok (non-parametric)
-- Deming — ordinary or weighted
-- 95 % confidence interval band
-- Bland–Altman plot (absolute or %)
+**📈 Passing–Bablok**
+Non-parametric regression — resistant to outliers, no assumptions about error distribution.
+Slope, intercept and 95 % confidence intervals via the rank-based method.
 """)
             with col_b:
                 st.markdown("""
-**🔢 Confusion matrix**
-- Zone diameter agreement grid
-- Essential agreement ±1 and ±2 mm
-- Categorical agreement (EUCAST/CLSI)
-- Very major and major error rates
+**📉 Deming regression**
+Accounts for measurement error in both methods.
+Ordinary (equal variances) or weighted (proportional CV, Linnet 1990).
+Confidence intervals via jackknife resampling.
 """)
             with col_c:
                 st.markdown("""
-**⚙️ Customisation & export**
-- Filter rows by organism, antibiotic…
-- Adjustable colours, titles, axes
-- PNG (150/300/600 dpi) and SVG
-- CSV results and HTML report
+**🔢 Confusion matrix**
+Zone diameter agreement grid for disk diffusion comparison.
+Essential agreement (±1/±2 mm), categorical agreement, VME and ME.
+EUCAST and CLSI breakpoints supported.
 """)
 
             st.divider()
 
-            # ── Expected data format ──────────────────────────────────────────
-            st.subheader("📄 Expected data format")
-            st.markdown("""
-Your file should contain **at least two numeric columns** — one for the
-reference method and one for the candidate method. Additional columns
-(organism name, antibiotic, lab site, etc.) are supported and can be used
-to filter rows before analysis.
-""")
+            # ── Data format + references side by side ─────────────────────────
+            fc1, fc2 = st.columns([3, 2])
 
-            fcol1, fcol2 = st.columns(2)
-            with fcol1:
-                st.markdown("**Minimal format** (two columns):")
+            with fc1:
+                st.markdown("**📄 Expected data format**")
+                st.markdown("At least two numeric columns — one per method. "
+                            "Extra columns (species, antibiotic, lab) can be used to filter rows.")
                 st.dataframe(pd.DataFrame({
-                    "Reference (mm)": [18, 20, 22, 19, 24, 21],
-                    "Candidate (mm)": [19, 20, 23, 20, 25, 22],
+                    "Species":        ["E. coli","E. coli","K. pneumoniae","S. aureus"],
+                    "Reference (mm)": [18, 20, 22, 24],
+                    "Candidate (mm)": [19, 20, 23, 25],
                 }), use_container_width=True, hide_index=True)
+                st.caption("Accepted: Excel (.xlsx/.xls), CSV, or paste from Excel. "
+                           "Comma or point as decimal. Header row optional.")
 
-            with fcol2:
-                st.markdown("**With metadata** (filterable):")
-                st.dataframe(pd.DataFrame({
-                    "Species":        ["E. coli","E. coli","K. pneumoniae","E. coli","S. aureus","K. pneumoniae"],
-                    "Reference (mm)": [18, 20, 22, 19, 24, 21],
-                    "Candidate (mm)": [19, 20, 23, 20, 25, 22],
-                }), use_container_width=True, hide_index=True)
-
-            st.markdown("""
-**Accepted input formats**
-- Excel (.xlsx, .xls) — any sheet, with or without a header row
-- CSV — comma, semicolon or tab-separated; comma or point as decimal
-- Paste directly from Excel — copy two columns and paste in the sidebar
-
-> **Tip:** If your file has a column like "Species" or "Antibiotic",
-> a filter will appear automatically after you select your data columns,
-> so you can analyse one organism at a time without editing the file.
-""")
-
-            st.divider()
-
-            # ── Acceptability thresholds ──────────────────────────────────────
-            st.subheader("📋 Acceptability criteria")
-            st.markdown("""
-For **zone diameter comparison** (confusion matrix), the following
-thresholds are used by EUCAST and CLSI to verify method equivalence:
-""")
-            st.dataframe(pd.DataFrame({
-                "Metric":          ["Essential Agreement ±2 mm",
-                                    "Categorical Agreement",
-                                    "Very Major Error (S→R)",
-                                    "Major Error (R→S)"],
-                "EUCAST":          ["≥ 90 %", "≥ 90 %",
-                                    "≤ 3 % of S isolates",
-                                    "≤ 3 % of R isolates"],
-                "CLSI":            ["≥ 90 %", "≥ 90 %",
-                                    "≤ 1.5 %", "≤ 3 %"],
-            }), use_container_width=True, hide_index=True)
-
-            st.divider()
-
-            # ── References ────────────────────────────────────────────────────
-            st.subheader("📚 References")
-            st.markdown("""
-1. Passing H, Bablok W. A new biometrical procedure for testing the
-   equality of measurements from two different analytical methods.
-   *J Clin Chem Clin Biochem.* 1983;21(11):709–720.
-   https://doi.org/10.1515/cclm.1983.21.11.709
-
-2. Deming WE. *Statistical Adjustment of Data.* New York: Wiley; 1943.
-
-3. Linnet K. Estimation of the linear relationship between the measurements
-   of two methods with proportional errors.
-   *Stat Med.* 1990;9(12):1463–1473.
-   https://doi.org/10.1002/sim.4780091210
-
-4. Bland JM, Altman DG. Statistical methods for assessing agreement between
-   two methods of clinical measurement.
-   *Lancet.* 1986;327(8476):307–310.
-   https://doi.org/10.1016/S0140-6736(86)90837-8
-
-5. EUCAST. Disk Diffusion Method for Antimicrobial Susceptibility Testing.
-   *EUCAST Disk Diffusion Implementation Guide v10.0.* 2023.
-   https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/
-
-6. CLSI. Verification of Commercial Microbial Identification and
-   Antimicrobial Susceptibility Testing Systems.
-   *CLSI document M52.* Wayne, PA: CLSI; 2015.
-
-7. CLSI. Method Comparison and Bias Estimation Using Patient Samples.
-   *CLSI document EP09c.* Wayne, PA: CLSI; 2018.
-
-8. Carstensen B. *Comparing Clinical Measurement Methods: A Practical Guide.*
-   Chichester: Wiley; 2010.
+            with fc2:
+                st.markdown("**📚 Key references**")
+                st.markdown("""
+- Passing & Bablok, *J Clin Chem Clin Biochem* 1983 — [DOI](https://doi.org/10.1515/cclm.1983.21.11.709)
+- Linnet K, *Stat Med* 1990 — [DOI](https://doi.org/10.1002/sim.4780091210)
+- Bland & Altman, *Lancet* 1986 — [DOI](https://doi.org/10.1016/S0140-6736(86)90837-8)
+- EUCAST Disk Diffusion Guide v10.0, 2023 — [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
+- CLSI EP09c — Method Comparison & Bias Estimation
+- CLSI M52 — Verification of AST Systems
 """)
             return None, None
 
