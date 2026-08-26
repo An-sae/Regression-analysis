@@ -239,14 +239,14 @@ def make_bland_altman_plot(
         std_d  = float(np.std(diffs[valid], ddof=1))
         loa_lo = mean_d - 1.96 * std_d
         loa_hi = mean_d + 1.96 * std_d
-        y_axis_title = f"Difference (%) ({y_label} − {x_label}) / mean × 100"
+        y_axis_title = "Difference (%)"
         pct_suffix = " %"
     else:
         diffs  = y - x
         mean_d = mean_diff
         loa_lo = loa_lower
         loa_hi = loa_upper
-        y_axis_title = f"Difference ({y_label} − {x_label})"
+        y_axis_title = "Difference"
         pct_suffix = ""
 
     def fmt(v):
@@ -305,7 +305,7 @@ def make_bland_altman_plot(
             font=dict(size=16),
         ),
         xaxis=dict(
-            title=f"Mean of {x_label} and {y_label}",
+            title="Mean",
             range=[resolved_x_min, resolved_x_max],
             showgrid=True, gridcolor="#F3F4F6", zeroline=False,
         ),

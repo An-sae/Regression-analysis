@@ -170,3 +170,45 @@ python tests/test_regression.py
 ## License
 
 MIT
+
+---
+
+## Precision Evaluation (EP15-A3)
+
+### Overview
+
+Estimates repeatability (within-run) and within-laboratory (total) imprecision following **CLSI EP15-A3** (2014). Computes SD and CV for both components and optionally performs a chi-square verification test against manufacturer-claimed values.
+
+### Protocol
+
+- **Recommended design**: 5 replicates per day × 5 days at ≥ 2 concentration levels
+- **Minimum**: 2 replicates per day × 2 days
+
+### Statistics
+
+| Statistic | Symbol | Formula |
+|---|---|---|
+| Within-run SD | Sᵣ | √[ Σ_d Σ_r (x_dr − x̄_d)² / D(n−1) ] |
+| Between-day SD | S_b | √[ max(0, s_day² − Sᵣ²/n) ] |
+| Within-laboratory SD | S_l | √( Sᵣ² + S_b² ) |
+| Verification value (Sᵣ) | — | σᵣ × √[ χ²(1−α/q, df) / df ] |
+
+### Data format
+
+One **column per day**, one **row per replicate**. Column headers are used as day labels.
+
+```
+Day 1    Day 2    Day 3    Day 4    Day 5
+2.015    2.019    2.025    1.972    1.981
+2.013    2.002    1.959    1.950    1.956
+1.963    1.979    2.000    1.973    1.957
+2.001    2.010    1.988    1.965    1.970
+1.998    1.995    2.005    1.980    1.975
+```
+
+Upload as Excel / CSV or paste directly from Excel. Comma or point accepted as decimal.
+
+### References
+
+- CLSI EP15-A3. *User Verification of Precision and Estimation of Bias; Approved Guideline — Third Edition.* Wayne, PA: CLSI; 2014.
+- Chesher D. Evaluating Assay Precision. *Clin Biochem Rev.* 2008;29(Suppl i):S23–S26.

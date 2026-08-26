@@ -1,6 +1,6 @@
 """
-Method Comparison Tool — crash-proof rewrite
-Three analysis types: Passing-Bablok | Deming | Confusion Matrix
+Method Comparison Tool
+Four analysis types: Passing-Bablok | Deming | Confusion Matrix | Precision (EP15-A3)
 Run with:  streamlit run app.py
 """
 import sys, os
@@ -21,6 +21,7 @@ from plots.mpl_export import (
 )
 from analysis.confusion import build_count_matrix, essential_agreement, categorical_agreement
 from plots.confusion_plot import make_confusion_plot, render_confusion_png
+from analysis.precision import compute_precision, precision_from_dataframe
 
 st.set_page_config(page_title="Method Comparison Tool", page_icon="📊", layout="wide")
 
@@ -130,7 +131,8 @@ with st.sidebar:
 
     st.subheader("Analysis type")
     analysis_type = st.selectbox("Choose analysis",
-        ["Passing–Bablok","Deming","Confusion Matrix"], key="analysis_type")
+        ["Passing–Bablok","Deming","Confusion Matrix","Precision Evaluation (EP15-A3)"],
+        key="analysis_type")
 
     if analysis_type == "Deming":
         deming_weighted = st.toggle("Weighted Deming", value=False, key="dw")
@@ -142,92 +144,100 @@ with st.sidebar:
     st.divider()
 
     st.subheader("Data input")
-    input_mode = st.radio("Input method",["📂 Upload file","📋 Paste data"],key="imode")
+    # Precision Evaluation has its own dedicated data input in the main area
+    if analysis_type == "Precision Evaluation (EP15-A3)":
+        st.caption("Upload or paste precision data in the main area →")
+        _x_sid = _y_sid = _sid_err = None
+        uploaded_file = pasted_text = None
+        input_mode = "📂 Upload file"   # safe default, unused for precision
+    else:
+        input_mode = st.radio("Input method",["📂 Upload file","📋 Paste data"],key="imode")
 
-    # Data-loading state
-    _x_sid = _y_sid = _sid_err = None
-    uploaded_file = pasted_text = None
+        # Data-loading state
+        _x_sid = _y_sid = _sid_err = None
+        uploaded_file = pasted_text = None
 
-    if input_mode == "📂 Upload file":
-        uploaded_file = st.file_uploader("Upload CSV or Excel",
-                                         type=["csv","xlsx","xls"], key="fup")
-        if uploaded_file is not None:
-            try:
-                fname = uploaded_file.name.lower()
-                if fname.endswith((".xlsx",".xls")):
-                    import openpyxl
-                    _rb = uploaded_file.read(); uploaded_file.seek(0)
-                    _wb = openpyxl.load_workbook(BytesIO(_rb),read_only=True,data_only=True)
-                    _sn = _wb.sheetnames; _wb.close()
-                    _ss = st.selectbox("Sheet / tab", _sn, key="ss")
-                    _hc = st.radio("Header row?",["Yes (first row)","No header"],
-                                   horizontal=True, key="hx")
-                    _hdr= _hc=="Yes (first row)"
-                    _pv = pd.read_excel(BytesIO(_rb),sheet_name=_ss,
-                                        header=0 if _hdr else None, nrows=5)
-                    if not _hdr:
-                        _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
+        if input_mode == "📂 Upload file":
+            uploaded_file = st.file_uploader("Upload CSV or Excel",
+                                             type=["csv","xlsx","xls"], key="fup")
+            if uploaded_file is not None:
+                try:
+                    fname = uploaded_file.name.lower()
+                    if fname.endswith((".xlsx",".xls")):
+                        import openpyxl
+                        _rb = uploaded_file.read(); uploaded_file.seek(0)
+                        _wb = openpyxl.load_workbook(BytesIO(_rb),read_only=True,data_only=True)
+                        _sn = _wb.sheetnames; _wb.close()
+                        _ss = st.selectbox("Sheet / tab", _sn, key="ss")
+                        _hc = st.radio("Header row?",["Yes (first row)","No header"],
+                                       horizontal=True, key="hx")
+                        _hdr= _hc=="Yes (first row)"
+                        _pv = pd.read_excel(BytesIO(_rb),sheet_name=_ss,
+                                            header=0 if _hdr else None, nrows=5)
+                        if not _hdr:
+                            _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
+                        else:
+                            _pv.columns=[str(c) for c in _pv.columns]
+                        st.caption("Preview (first 5 rows):")
+                        st.dataframe(_pv, use_container_width=True)
+                        _cols=list(_pv.columns)
+                        if len(_cols)>=2:
+                            _xc=st.selectbox("Reference column (x)",_cols,0,key="xce")
+                            _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="yce")
+                            _full=pd.read_excel(BytesIO(_rb),sheet_name=_ss,
+                                                header=0 if _hdr else None)
+                            if not _hdr:
+                                _full.columns = [f"Column {i+1}" for i in range(len(_full.columns))]
+                            else:
+                                _full.columns=[str(c) for c in _full.columns]
+                            _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="xe")
+                            def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+                            _x_sid=_tonum(_full[_xc])
+                            _y_sid=_tonum(_full[_yc])
+                        else:
+                            _sid_err="Sheet needs at least 2 columns."
                     else:
-                        _pv.columns=[str(c) for c in _pv.columns]
-                    st.caption("Preview (first 5 rows):")
-                    st.dataframe(_pv, use_container_width=True)
-                    _cols=list(_pv.columns)
-                    if len(_cols)>=2:
-                        _xc=st.selectbox("Reference column (x)",_cols,0,key="xce")
-                        _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="yce")
-                        # Load full sheet, apply optional filter, extract x/y
-                        _full=pd.read_excel(BytesIO(_rb),sheet_name=_ss,
-                                            header=0 if _hdr else None)
+                        _rb = uploaded_file.read(); uploaded_file.seek(0)
+                        _hc = st.radio("Header row?",["Yes (first row)","No header"],
+                                       horizontal=True, key="hc")
+                        _hdr= _hc=="Yes (first row)"
+                        _pv = pd.read_csv(BytesIO(_rb), header=0 if _hdr else None,
+                                          sep=None, engine="python", decimal=",")
+                        if _pv.select_dtypes(include=[np.number]).shape[1]<2:
+                            _pv=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
+                                            sep=None,engine="python")
+                        if not _hdr:
+                            _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
+                        else:
+                            _pv.columns=[str(c) for c in _pv.columns]
+                        st.caption("Preview (first 5 rows):")
+                        st.dataframe(_pv.head(), use_container_width=True)
+                        _cols=list(_pv.columns)
+                        _xc=st.selectbox("Reference column (x)",_cols,0,key="xcc")
+                        _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="ycc")
+                        _full=pd.read_csv(BytesIO(_rb), header=0 if _hdr else None,
+                                          sep=None, engine="python", decimal=",")
+                        if _full.select_dtypes(include=[np.number]).shape[1]<2:
+                            _full=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
+                                              sep=None,engine="python")
                         if not _hdr:
                             _full.columns = [f"Column {i+1}" for i in range(len(_full.columns))]
                         else:
                             _full.columns=[str(c) for c in _full.columns]
-                        _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="xe")
+                        _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="ce")
                         def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
                         _x_sid=_tonum(_full[_xc])
                         _y_sid=_tonum(_full[_yc])
-                    else:
-                        _sid_err="Sheet needs at least 2 columns."
-                else:
-                    _rb = uploaded_file.read(); uploaded_file.seek(0)
-                    _hc = st.radio("Header row?",["Yes (first row)","No header"],
-                                   horizontal=True, key="hc")
-                    _hdr= _hc=="Yes (first row)"
-                    _pv = pd.read_csv(BytesIO(_rb), header=0 if _hdr else None,
-                                      sep=None, engine="python", decimal=",")
-                    if _pv.select_dtypes(include=[np.number]).shape[1]<2:
-                        _pv=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
-                                        sep=None,engine="python")
-                    if not _hdr:
-                        _pv.columns = [f"Column {i+1}" for i in range(len(_pv.columns))]
-                    else:
-                        _pv.columns=[str(c) for c in _pv.columns]
-                    st.caption("Preview (first 5 rows):")
-                    st.dataframe(_pv.head(), use_container_width=True)
-                    _cols=list(_pv.columns)
-                    _xc=st.selectbox("Reference column (x)",_cols,0,key="xcc")
-                    _yc=st.selectbox("Candidate column (y)",_cols,min(1,len(_cols)-1),key="ycc")
-                    # Load full CSV, apply optional filter, extract x/y
-                    _full=pd.read_csv(BytesIO(_rb), header=0 if _hdr else None,
-                                      sep=None, engine="python", decimal=",")
-                    if _full.select_dtypes(include=[np.number]).shape[1]<2:
-                        _full=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,
-                                          sep=None,engine="python")
-                    if not _hdr:
-                        _full.columns = [f"Column {i+1}" for i in range(len(_full.columns))]
-                    else:
-                        _full.columns=[str(c) for c in _full.columns]
-                    _full=_apply_filter(_full, exclude_cols=[_xc,_yc], key_prefix="ce")
-                    def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
-                    _x_sid=_tonum(_full[_xc])
-                    _y_sid=_tonum(_full[_yc])
-            except Exception as e:
-                _sid_err=str(e)
-    else:
-        st.markdown("Copy two columns from Excel and paste below.")
-        pasted_text=st.text_area("Paste data here",height=160,
-                                 placeholder="10,2\t10,5\n15,7\t16,1\n...",key="pa")
-    st.divider()
+                except Exception as e:
+                    _sid_err=str(e)
+        else:
+            if analysis_type == "Precision Evaluation (EP15-A3)":
+                st.info("Use the upload/paste section in the main area for precision data.")
+                pasted_text = None
+            else:
+                st.markdown("Copy two columns from Excel and paste below.")
+                pasted_text=st.text_area("Paste data here",height=160,
+                                         placeholder="10,2\t10,5\n15,7\t16,1\n...",key="pa")
 
     st.subheader("Method names")
     x_label=st.text_input("Reference method","Reference Method",key="xl")
@@ -236,7 +246,7 @@ with st.sidebar:
 
     # ── Safe defaults for ALL branch-specific variables ───────────────────────
     pb_title="Passing–Bablok Method Comparison"; ba_title_input=""
-    decimals=4
+    decimals=2
     pb_x_min=pb_x_max=pb_y_min=pb_y_max=None
     ba_x_min=ba_x_max=ba_y_min=ba_y_max=None
     ba_pct_diff=False
@@ -256,6 +266,11 @@ with st.sidebar:
     cm_num_bold=True; cm_show_diag=True; cm_show_totals=True
     bp_system="EUCAST"; bp_s_x=bp_s_y=20.0; bp_r_x=bp_r_y=16.0
 
+    # Precision safe defaults
+    prec_alpha=0.05; prec_n_levels=1
+    prec_claimed_sr=None; prec_claimed_sl=None
+    prec_decimals=4
+
     # ── Override defaults with real widgets for active analysis ───────────────
     if analysis_type in ("Passing–Bablok","Deming"):
         _dt={
@@ -264,12 +279,13 @@ with st.sidebar:
                      else "Deming Method Comparison"
         }[analysis_type]
         st.subheader("Graph titles")
-        pb_title      =st.text_input("Regression title",value=_dt,key="pbt")
+        pb_title      =st.text_input("Regression title",value="",
+                                     placeholder="Leave blank for auto",key="pbt")
         ba_title_input=st.text_input("Bland–Altman title",value="",
                                      placeholder="Leave blank for auto",key="bat")
         st.divider()
         st.subheader("Decimal places")
-        decimals=st.slider("Decimals",1,8,4,key="dec")
+        decimals=st.slider("Decimals",1,8,2,key="dec")
         st.divider()
         with st.expander("📐 Axis ranges"):
             st.markdown("**Regression** (blank=auto)")
@@ -310,7 +326,7 @@ with st.sidebar:
             ba_label_loa_upper=st.text_input("Annotation: +LoA", "+1,96 SD",  key="blu")
             ba_label_loa_lower=st.text_input("Annotation: −LoA", "−1,96 SD",  key="bll")
 
-    else:   # Confusion Matrix
+    elif analysis_type == "Confusion Matrix":
         st.subheader("Matrix settings")
         cm_step=st.number_input("Step size (mm/cell)",1,10,1,1,key="cms")
         _cc=st.columns(2)
@@ -338,8 +354,34 @@ with st.sidebar:
         bp_s_y=_bp[0].number_input(f"S ≥ ({y_label})",value=20.0,step=0.5,key="bsy")
         bp_r_y=_bp[1].number_input(f"R ≤ ({y_label})",value=16.0,step=0.5,key="bry")
 
+    else:   # Precision Evaluation (EP15-A3)
+        st.subheader("Precision settings")
+        st.caption("Protocol: ≥ 2 replicates/day over ≥ 2 days. "
+                   "EP15-A3 recommends 5 replicates × 5 days.")
+        prec_decimals = st.slider("Decimal places in results", 1, 6, 4, key="pr_dec")
+        prec_alpha    = st.selectbox("Significance level (α)",
+                                     [0.05, 0.01], index=0,
+                                     format_func=lambda v: f"{v:.0%}",
+                                     key="pr_alpha")
+        prec_n_levels = st.number_input("Number of levels tested (q)",
+                                         min_value=1, max_value=5, value=1, step=1,
+                                         key="pr_q",
+                                         help="Used for Bonferroni correction of chi-square test. "
+                                              "Set to the number of concentration levels you are testing simultaneously.")
+        st.markdown("**Manufacturer claims (optional)**")
+        st.caption("Enter manufacturer's claimed SDs to perform chi-square verification. Leave at 0 to skip.")
+        _prc=st.columns(2)
+        _csr=_prc[0].number_input("Claimed repeatability SD (σr)",
+                                   min_value=0.0, value=0.0, step=0.001,
+                                   format="%.4f", key="pr_csr")
+        _csl=_prc[1].number_input("Claimed within-lab SD (σl)",
+                                   min_value=0.0, value=0.0, step=0.001,
+                                   format="%.4f", key="pr_csl")
+        prec_claimed_sr = _csr if _csr > 0 else None
+        prec_claimed_sl = _csl if _csl > 0 else None
+
     st.divider()
-    st.caption("Passing & Bablok 1983 · Deming 1943 · Linnet 1990")
+    st.caption("Passing & Bablok 1983 · Deming 1943 · Linnet 1990 · CLSI EP15-A3 2014")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -387,6 +429,15 @@ Essential agreement (±1/±2 mm), categorical agreement, VME and ME.
 EUCAST and CLSI breakpoints supported.
 """)
 
+            col_d, _ = st.columns([1, 2])
+            with col_d:
+                st.markdown("""
+**🔬 Precision Evaluation (EP15-A3)**
+Within-run (repeatability) and within-laboratory (total) SD and CV.
+Chi-square verification against manufacturer claims.
+Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
+""")
+
             st.divider()
 
             # ── Data format + references side by side ─────────────────────────
@@ -394,15 +445,42 @@ EUCAST and CLSI breakpoints supported.
 
             with fc1:
                 st.markdown("**📄 Expected data format**")
-                st.markdown("At least two numeric columns — one per method. "
-                            "Extra columns (species, antibiotic, lab) can be used to filter rows.")
-                st.dataframe(pd.DataFrame({
-                    "Species":        ["E. coli","E. coli","K. pneumoniae","S. aureus"],
-                    "Reference (mm)": [18, 20, 22, 24],
-                    "Candidate (mm)": [19, 20, 23, 25],
-                }), use_container_width=True, hide_index=True)
-                st.caption("Accepted: Excel (.xlsx/.xls), CSV, or paste from Excel. "
-                           "Comma or point as decimal. Header row optional.")
+
+                _wt1, _wt2 = st.tabs(["Regression / Confusion matrix", "Precision Evaluation"])
+
+                with _wt1:
+                    st.markdown("At least two numeric columns — one per method. "
+                                "Extra columns (species, antibiotic, lab) can be used to filter rows.")
+                    st.dataframe(pd.DataFrame({
+                        "Species":        ["E. coli","E. coli","K. pneumoniae","S. aureus"],
+                        "Reference (mm)": [18, 20, 22, 24],
+                        "Candidate (mm)": [19, 20, 23, 25],
+                    }), use_container_width=True, hide_index=True)
+                    st.caption("Accepted: Excel (.xlsx/.xls), CSV, or paste from Excel. "
+                               "Comma or point as decimal. Header row optional.")
+
+                with _wt2:
+                    st.markdown("**One column per day, one row per replicate.** "
+                                "EP15-A3 recommends 5 replicates × 5 days at ≥ 2 concentration levels.")
+                    st.dataframe(pd.DataFrame({
+                        "Day 1": [2.015, 2.013, 1.963, 2.001, 1.998],
+                        "Day 2": [2.019, 2.002, 1.979, 2.010, 1.995],
+                        "Day 3": [2.025, 1.959, 2.000, 1.988, 2.005],
+                        "Day 4": [1.972, 1.950, 1.973, 1.965, 1.980],
+                        "Day 5": [1.981, 1.956, 1.957, 1.970, 1.975],
+                    }), use_container_width=True, hide_index=True)
+                    st.caption("Upload as Excel / CSV or paste directly from Excel. "
+                               "Column headers become the day labels. Comma or point as decimal.")
+
+                    st.markdown("**Example output:**")
+                    st.dataframe(pd.DataFrame({
+                        "Component":              ["Within-run (repeatability)",
+                                                   "Between-day",
+                                                   "Within-laboratory (total)"],
+                        "SD":                     ["0,0235", "0,0116", "0,0262"],
+                        "CV (%)":                 ["1,18",   "—",      "1,32"],
+                        "Degrees of freedom":     ["10",     "4",      "12,8 (eff.)"],
+                    }), use_container_width=True, hide_index=True)
 
             with fc2:
                 st.markdown("**📚 Key references**")
@@ -410,9 +488,11 @@ EUCAST and CLSI breakpoints supported.
 - Passing & Bablok, *J Clin Chem Clin Biochem* 1983 — [DOI](https://doi.org/10.1515/cclm.1983.21.11.709)
 - Linnet K, *Stat Med* 1990 — [DOI](https://doi.org/10.1002/sim.4780091210)
 - Bland & Altman, *Lancet* 1986 — [DOI](https://doi.org/10.1016/S0140-6736(86)90837-8)
+- CLSI EP15-A3, 2014 — Precision verification
+- CLSI EP09c — Method comparison & bias estimation
 - EUCAST Disk Diffusion Guide v10.0, 2023 — [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
-- CLSI EP09c — Method Comparison & Bias Estimation
-- CLSI M52 — Verification of AST Systems
+- CLSI M52 — Verification of AST systems
+- Chesher D, *Clin Biochem Rev* 2008 — [DOI](https://doi.org/10.3109/00365519809099610)
 """)
             return None, None
 
@@ -431,16 +511,20 @@ EUCAST and CLSI breakpoints supported.
         except ValueError as e:
             st.error(str(e)); return None,None
 
-x_raw, y_raw = _get_data()
-if x_raw is None:
-    st.stop()
+if analysis_type == "Precision Evaluation (EP15-A3)":
+    x_raw = y_raw = np.array([1.0, 2.0])  # dummy — precision branch has its own upload
+else:
+    x_raw, y_raw = _get_data()
+    if x_raw is None:
+        st.stop()
 
-n_tot=len(x_raw)
-n_mis=int(np.sum(~(np.isfinite(x_raw)&np.isfinite(y_raw))))
-_c1,_c2,_c3=st.columns(3)
-_c1.metric("Total rows",n_tot)
-_c2.metric("Missing / excluded",n_mis)
-_c3.metric("Valid pairs",n_tot-n_mis)
+if analysis_type != "Precision Evaluation (EP15-A3)":
+    n_tot=len(x_raw)
+    n_mis=int(np.sum(~(np.isfinite(x_raw)&np.isfinite(y_raw))))
+    _c1,_c2,_c3=st.columns(3)
+    _c1.metric("Total rows",n_tot)
+    _c2.metric("Missing / excluded",n_mis)
+    _c3.metric("Valid pairs",n_tot-n_mis)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -487,10 +571,16 @@ if analysis_type in ("Passing–Bablok","Deming"):
     ]),use_container_width=True,hide_index=True)
 
     _cp,_cb=st.columns(2)
+    # Auto-title from method name when user leaves title blank
+    _auto_reg_title = {
+        "Passing–Bablok": "Passing–Bablok Method Comparison",
+        "Deming": "Weighted Deming Method Comparison" if deming_weighted else "Deming Method Comparison",
+    }[analysis_type]
+    _resolved_pb_title = pb_title if pb_title.strip() else _auto_reg_title
     _pkw=dict(slope=rr["slope"],intercept=rr["intercept"],
               slope_lower=rr["slope_lower"],slope_upper=rr["slope_upper"],
               intercept_lower=rr["intercept_lower"],intercept_upper=rr["intercept_upper"],
-              r_squared=ss["r_squared"],x_label=x_label,y_label=y_label,title=pb_title,
+              r_squared=ss["r_squared"],x_label=x_label,y_label=y_label,title=_resolved_pb_title,
               color_scatter=pb_color_scatter,color_identity=pb_color_identity,
               color_regression=pb_color_regression,color_ci=pb_color_ci,
               ci_alpha=pb_ci_alpha,show_ci=pb_show_ci,
@@ -545,7 +635,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
 # ══════════════════════════════════════════════════════════════════════════════
 # BRANCH B — Confusion Matrix
 # ══════════════════════════════════════════════════════════════════════════════
-else:
+elif analysis_type == "Confusion Matrix":
     st.subheader("Zone Diameter Confusion Matrix")
     try:
         matrix,x_bins,y_bins=build_count_matrix(
@@ -616,3 +706,290 @@ else:
     _mdf.index.name=f"{y_label}\\{x_label}"
     _d2.download_button("📥 Matrix CSV",_mdf.to_csv(),
                         "confusion_matrix.csv","text/csv",key="ccsv")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BRANCH C — Precision Evaluation (EP15-A3)
+# ══════════════════════════════════════════════════════════════════════════════
+else:
+    st.subheader("Precision Evaluation — CLSI EP15-A3")
+    st.markdown("Upload or paste data where **each column = one day** and each row = one replicate.")
+
+    # For precision, data_raw is not needed — we need a wide-format table.
+    # Offer a dedicated upload here, independent of the main data input.
+    st.markdown("---")
+    _pr_tab1, _pr_tab2 = st.tabs(["📂 Upload precision file", "📋 Paste precision data"])
+
+    _pr_data_dict = None   # will hold {day_label: [values]}
+
+    with _pr_tab1:
+        _pr_file = st.file_uploader(
+            "Upload Excel or CSV (columns = days, rows = replicates)",
+            type=["csv","xlsx","xls"], key="pr_file")
+        if _pr_file is not None:
+            try:
+                _pr_fname = _pr_file.name.lower()
+                _pr_rb = _pr_file.read()
+                if _pr_fname.endswith((".xlsx",".xls")):
+                    _pr_df = pd.read_excel(BytesIO(_pr_rb), header=0)
+                else:
+                    _pr_df = pd.read_csv(BytesIO(_pr_rb), sep=None, engine="python")
+                _pr_df.columns = [str(c) for c in _pr_df.columns]
+                # Rename columns that look like integers to "Column N"
+                _pr_df.columns = [
+                    f"Column {i+1}" if c.strip().lstrip("-").isdigit() else c
+                    for i, c in enumerate(_pr_df.columns)
+                ]
+                st.caption("Preview:")
+                st.dataframe(_pr_df.head(), use_container_width=True)
+                _pr_data_dict = precision_from_dataframe(_pr_df)
+            except Exception as e:
+                st.error(f"Could not read file: {e}")
+
+    with _pr_tab2:
+        st.markdown(
+            "Paste your data — **columns = days, rows = replicates**. "
+            "Separate columns with tabs (copy/paste from Excel works directly). "
+            "First row = day names (header).")
+        _pr_paste = st.text_area(
+            "Paste here", height=180,
+            placeholder="Day 1\tDay 2\tDay 3\tDay 4\tDay 5\n"
+                        "2,015\t2,019\t2,025\t1,972\t1,981\n"
+                        "2,013\t2,002\t1,959\t1,950\t1,956\n"
+                        "1,963\t1,979\t2,000\t1,973\t1,957",
+            key="pr_paste")
+        if _pr_paste and _pr_paste.strip():
+            try:
+                from io import StringIO
+                _pr_df2 = pd.read_csv(StringIO(_pr_paste), sep="\t", decimal=",")
+                if _pr_df2.shape[1] < 2:
+                    _pr_df2 = pd.read_csv(StringIO(_pr_paste), sep="\t")
+                _pr_df2.columns = [str(c) for c in _pr_df2.columns]
+                st.caption("Preview:")
+                st.dataframe(_pr_df2.head(), use_container_width=True)
+                _pr_data_dict = precision_from_dataframe(_pr_df2)
+            except Exception as e:
+                st.error(f"Could not parse pasted data: {e}")
+
+    if _pr_data_dict is None:
+        st.info("Upload or paste your replicate data above to run the precision analysis.")
+        st.stop()
+
+    # Validate
+    _pr_days = list(_pr_data_dict.keys())
+    _pr_ns   = [len(v) for v in _pr_data_dict.values()]
+    if len(_pr_days) < 2:
+        st.error("Need at least 2 days of data."); st.stop()
+    if min(_pr_ns) < 2:
+        st.error("Need at least 2 replicates per day."); st.stop()
+    if max(_pr_ns) != min(_pr_ns):
+        st.warning(
+            f"Days have different numbers of replicates ({min(_pr_ns)}–{max(_pr_ns)}). "
+            "Truncating to the minimum to ensure a balanced design.")
+        _pr_min_n = min(_pr_ns)
+        _pr_data_dict = {k: v[:_pr_min_n] for k, v in _pr_data_dict.items()}
+
+    # Run analysis
+    try:
+        _pr = compute_precision(
+            _pr_data_dict,
+            alpha=float(prec_alpha),
+            n_levels=int(prec_n_levels),
+            claimed_sr=prec_claimed_sr,
+            claimed_sl=prec_claimed_sl,
+        )
+    except Exception as e:
+        st.error(f"Precision calculation failed: {e}"); st.stop()
+
+    def _pf(v): return f"{v:.{prec_decimals}f}".replace(".", ",")
+
+    # ── Study design banner ───────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Precision Results")
+    _di1,_di2,_di3,_di4 = st.columns(4)
+    _di1.metric("Grand mean",    _pf(_pr["grand_mean"]))
+    _di2.metric("Days",          str(_pr["D"]))
+    _di3.metric("Replicates / day", str(_pr["n"]))
+    _di4.metric("Total measurements", str(_pr["D"] * _pr["n"]))
+
+    st.divider()
+
+    # ── Two large headline boxes ──────────────────────────────────────────────
+    _h1, _h2 = st.columns(2)
+    with _h1:
+        st.markdown("""
+<div style="background:#EFF6FF;border-radius:12px;padding:20px 24px;border:1px solid #BFDBFE">
+<p style="margin:0;font-size:0.78rem;color:#1E40AF;font-weight:600;letter-spacing:0.05em">WITHIN-RUN (REPEATABILITY)</p>
+<p style="margin:4px 0 0;font-size:2rem;font-weight:700;color:#1E3A5F">CV = {cv} %</p>
+<p style="margin:2px 0 0;font-size:1.1rem;color:#2563EB">SD = {sd}</p>
+<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">df = {df} &nbsp;|&nbsp; Protocol: CLSI EP15-A3</p>
+</div>
+""".format(sd=_pf(_pr["sr"]), cv=_pf(_pr["cv_r"]), df=_pr["df_within"]),
+        unsafe_allow_html=True)
+
+    with _h2:
+        st.markdown("""
+<div style="background:#F0FDF4;border-radius:12px;padding:20px 24px;border:1px solid #BBF7D0">
+<p style="margin:0;font-size:0.78rem;color:#166534;font-weight:600;letter-spacing:0.05em">WITHIN-LABORATORY (TOTAL IMPRECISION)</p>
+<p style="margin:4px 0 0;font-size:2rem;font-weight:700;color:#14532D">CV = {cv} %</p>
+<p style="margin:2px 0 0;font-size:1.1rem;color:#16A34A">SD = {sd}</p>
+<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">eff. df = {df} &nbsp;|&nbsp; Includes between-day variation</p>
+</div>
+""".format(sd=_pf(_pr["sl"]), cv=_pf(_pr["cv_l"]), df=f"{_pr['T']:.1f}"),
+        unsafe_allow_html=True)
+
+    st.markdown("")   # spacer
+
+    # ── Full breakdown table ──────────────────────────────────────────────────
+    with st.expander("📊 Full variance component breakdown", expanded=True):
+        st.dataframe(pd.DataFrame([
+            {"Component": "Within-run (Sᵣ)",
+             "SD":     _pf(_pr["sr"]),
+             "CV (%)": _pf(_pr["cv_r"]),
+             "Variance (SD²)": _pf(_pr["sr2"]),
+             "df":     str(_pr["df_within"])},
+            {"Component": "Between-day (Sᵦ)",
+             "SD":     _pf(_pr["sb"]),
+             "CV (%)": "—",
+             "Variance (SD²)": _pf(_pr["sb2"]),
+             "df":     str(_pr["df_between"])},
+            {"Component": "Within-laboratory / Total (Sₗ)",
+             "SD":     _pf(_pr["sl"]),
+             "CV (%)": _pf(_pr["cv_l"]),
+             "Variance (SD²)": _pf(_pr["sl2"]),
+             "df":     f"{_pr['T']:.1f} (eff.)"},
+        ]), use_container_width=True, hide_index=True)
+
+    # ── Verification against manufacturer claims ──────────────────────────────
+    if prec_claimed_sr is not None or prec_claimed_sl is not None:
+        st.markdown("**Chi-square verification (EP15-A3 §2.4.3)**")
+        st.caption(f"α = {float(prec_alpha):.0%},  q = {prec_n_levels} level(s).  "
+                   "Pass if observed SD ≤ verification value.")
+        _vrows = []
+        if prec_claimed_sr is not None:
+            _vrows.append({
+                "Component":         "Within-run (Sᵣ)",
+                "Claimed SD":        _pf(prec_claimed_sr),
+                "Observed SD":       _pf(_pr["sr"]),
+                "Verification value":_pf(_pr["verif_sr"]),
+                "Verdict":           "✅  PASS" if _pr["pass_sr"] else "❌  FAIL",
+            })
+        if prec_claimed_sl is not None:
+            _vrows.append({
+                "Component":         "Within-laboratory (Sₗ)",
+                "Claimed SD":        _pf(prec_claimed_sl),
+                "Observed SD":       _pf(_pr["sl"]),
+                "Verification value":_pf(_pr["verif_sl"]),
+                "Verdict":           "✅  PASS" if _pr["pass_sl"] else "❌  FAIL",
+            })
+        st.dataframe(pd.DataFrame(_vrows), use_container_width=True, hide_index=True)
+
+    # ── Per-day summary ───────────────────────────────────────────────────────
+    with st.expander("📋 Per-day summary"):
+        _day_df = pd.DataFrame(_pr["day_summary"])
+        for _col in ["Mean","SD","CV (%)","Min","Max"]:
+            _day_df[_col] = _day_df[_col].map(_pf)
+        st.dataframe(_day_df, use_container_width=True, hide_index=True)
+
+    # ── Outliers ──────────────────────────────────────────────────────────────
+    if _pr["outliers"]:
+        st.warning(
+            f"⚠️ {len(_pr['outliers'])} potential outlier(s) detected "
+            "(|deviation| > 3.5 × Sᵣ). Investigate before accepting results.")
+        _ol_df = pd.DataFrame(_pr["outliers"])
+        _ol_df["Deviation / Sᵣ"] = _ol_df["Deviation / Sr"].map(lambda v: f"{v:.2f}")
+        _ol_df = _ol_df.drop(columns=["Deviation / Sr"])
+        st.dataframe(_ol_df, use_container_width=True, hide_index=True)
+
+    # ── Export — journal-style table ──────────────────────────────────────────
+    st.divider()
+    st.subheader("Export")
+
+    _day_keys = list(_pr_data_dict.keys())
+    _n_reps   = _pr["n"]
+    _day_summ = {s["Day"]: s for s in _pr["day_summary"]}
+
+    # Column headers: Day | Rep 1 | Rep 2 … | Mean | SD | CV (%)
+    _rep_cols = [f"Rep {i+1}" for i in range(_n_reps)]
+    _all_cols = ["Day"] + _rep_cols + ["Mean", "SD", "CV (%)"]
+
+    # One row per day
+    _jrows = []
+    for _dk in _day_keys:
+        _vals = _pr_data_dict[_dk]
+        _s    = _day_summ[_dk]
+        _row  = {"Day": _dk}
+        for _ri in range(_n_reps):
+            _row[f"Rep {_ri+1}"] = _pf(_vals[_ri]) if _ri < len(_vals) else "—"
+        _row["Mean"]    = _pf(_s["Mean"])
+        _row["SD"]      = _pf(_s["SD"])
+        _row["CV (%)"]  = _pf(_s["CV (%)"])
+        _jrows.append(_row)
+
+    _jdf = pd.DataFrame(_jrows, columns=_all_cols)
+
+    # Precision summary footer rows (span Day column; values in Mean col for alignment)
+    _footer = [
+        {"Day": "Within-run (repeatability)ᵃ",
+         **{f"Rep {i+1}": "" for i in range(_n_reps)},
+         "Mean": "", "SD": _pf(_pr["sr"]), "CV (%)": _pf(_pr["cv_r"])},
+        {"Day": "Within-laboratory (total)ᵇ",
+         **{f"Rep {i+1}": "" for i in range(_n_reps)},
+         "Mean": "", "SD": _pf(_pr["sl"]), "CV (%)": _pf(_pr["cv_l"])},
+    ]
+    if prec_claimed_sr is not None:
+        _footer.append({
+            "Day": "Manufacturer claim — repeatabilityᶜ",
+            **{f"Rep {i+1}": "" for i in range(_n_reps)},
+            "Mean": "", "SD": _pf(prec_claimed_sr),
+            "CV (%)": "Pass" if _pr["pass_sr"] else "Fail",
+        })
+    if prec_claimed_sl is not None:
+        _footer.append({
+            "Day": "Manufacturer claim — within-laboratoryᶜ",
+            **{f"Rep {i+1}": "" for i in range(_n_reps)},
+            "Mean": "", "SD": _pf(prec_claimed_sl),
+            "CV (%)": "Pass" if _pr["pass_sl"] else "Fail",
+        })
+
+    _footer_df = pd.DataFrame(_footer, columns=_all_cols)
+    _full_jdf  = pd.concat([_jdf, _footer_df], ignore_index=True)
+
+    # Footnotes
+    _footnotes = [
+        f"ᵃ Within-run SD (Sᵣ) = {_pf(_pr['sr'])}, CV% = {_pf(_pr['cv_r'])} "
+        f"(df = {_pr['df_within']}; CLSI EP15-A3).",
+        f"ᵇ Within-laboratory SD (Sₗ) = {_pf(_pr['sl'])}, CV% = {_pf(_pr['cv_l'])} "
+        f"(effective df = {_pr['T']:.1f}; includes between-day variation).",
+        f"  Grand mean = {_pf(_pr['grand_mean'])}, "
+        f"D = {_pr['D']} days, n = {_pr['n']} replicates/day.",
+    ]
+    if prec_claimed_sr is not None or prec_claimed_sl is not None:
+        _footnotes.append(
+            f"ᶜ Chi-square verification (α = {float(prec_alpha):.0%}, "
+            f"q = {prec_n_levels}); Pass if observed SD ≤ verification value."
+        )
+
+    # Preview in app
+    st.caption("Journal-style precision table — days as rows, replicates as columns, "
+               "precision summary in footer:")
+    st.dataframe(_full_jdf.set_index("Day"), use_container_width=True)
+
+    for _fn in _footnotes:
+        st.caption(_fn)
+
+    # Build download: table + footnotes as trailing rows
+    _fn_rows = [{"Day": fn, **{c: "" for c in _all_cols if c != "Day"}}
+                for fn in _footnotes]
+    _dl_df = pd.concat(
+        [_full_jdf, pd.DataFrame(_fn_rows, columns=_all_cols)],
+        ignore_index=True
+    ).set_index("Day")
+
+    st.download_button(
+        "📥 Download journal table (CSV)",
+        _dl_df.to_csv(),
+        "precision_journal_table.csv",
+        "text/csv",
+        key="pr_journal_csv",
+    )

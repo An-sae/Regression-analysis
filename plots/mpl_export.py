@@ -175,15 +175,14 @@ def render_ba_png(
         loa_lo = mean_d - 1.96 * std_d
         loa_hi = mean_d + 1.96 * std_d
         y_title  = "Difference (%)"
-        auto_title = ("Bland–Altman Plot (% difference)\n"
-                      f"({y_label} − {x_label}) / mean × 100")
+        auto_title = "Bland–Altman Plot (% difference)"
         suffix = " %"
     else:
         diffs  = y - x
         mean_d = mean_diff
         loa_lo = loa_lower
         loa_hi = loa_upper
-        y_title    = f"Difference\n({y_label} − {x_label})"
+        y_title    = "Difference"
         auto_title = "Bland–Altman Plot"
         suffix = ""
 
@@ -230,8 +229,7 @@ def render_ba_png(
 
     ax.set_xlim(rx_min, rx_max)
     ax.set_ylim(ry_min, ry_max)
-    ax.set_xlabel(_wrap_label(f"Mean of {x_label} and {y_label}"),
-                  fontsize=11, labelpad=8)
+    ax.set_xlabel("Mean", fontsize=11, labelpad=8)
     ax.set_ylabel(y_title, fontsize=11, labelpad=8)
     ax.set_title(ba_title, fontsize=13, fontweight="bold", pad=12)
     ax.set_facecolor("white")
