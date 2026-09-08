@@ -1,0 +1,147 @@
+{
+  "project_name": "Method Comparison Tool",
+  "description": "Streamlit web application for analytical method comparison in clinical microbiology and clinical chemistry. Supports Passing-Bablok regression, Deming regression, zone diameter confusion matrix, and EP15-A3 precision evaluation.",
+  "version": "1.0.0",
+  "entry_point": "app.py",
+  "launch_command": "streamlit run app.py",
+  "python_version": ">=3.11",
+  "streamlit_version": ">=1.32",
+
+  "dependencies": {
+    "numpy": ">=1.24",
+    "pandas": ">=2.0",
+    "scipy": ">=1.11",
+    "plotly": ">=5.18",
+    "streamlit": ">=1.32",
+    "openpyxl": ">=3.1",
+    "matplotlib": ">=3.7"
+  },
+
+  "important_files": {
+    "app.py": "Single Streamlit entry point — 996 lines — all UI logic, sidebar, four analysis branches",
+    "analysis/regression.py": "Passing-Bablok rank-based regression algorithm",
+    "analysis/deming.py": "Ordinary and weighted Deming regression with jackknife CIs",
+    "analysis/statistics.py": "Pearson r, R-squared, bias, Bland-Altman limits of agreement",
+    "analysis/confusion.py": "Zone diameter count matrix, essential agreement, categorical agreement, VME, ME",
+    "analysis/precision.py": "CLSI EP15-A3 within-run and within-laboratory precision evaluation",
+    "analysis/export.py": "CSV export, HTML report builder, DPI label helpers",
+    "plots/regression_plot.py": "Plotly interactive regression and Bland-Altman plots",
+    "plots/confusion_plot.py": "Plotly interactive confusion matrix heatmap and matplotlib static export",
+    "plots/mpl_export.py": "Matplotlib PNG and SVG export for regression and Bland-Altman plots",
+    "tests/test_regression.py": "Unit tests for Passing-Bablok (8 tests — regression only)",
+    "data/sample.csv": "25-row example dataset for testing",
+    ".github/workflows/keep_awake.yml": "GitHub Actions workflow — pings app every 6 hours",
+    ".github/scripts/wake_streamlit.py": "Playwright script — clicks Streamlit wake button if app is sleeping",
+    "requirements.txt": "Python package dependencies",
+    "README.md": "Full user and developer documentation"
+  },
+
+  "analysis_modules": {
+    "passing_bablok": {
+      "function": "analysis.regression.passing_bablok(x, y, ci=0.95)",
+      "returns": "dict: slope, slope_lower, slope_upper, intercept, intercept_lower, intercept_upper, n, n_excluded",
+      "algorithm": "Rank-based median of pairwise slopes, Passing & Bablok 1983"
+    },
+    "deming": {
+      "function": "analysis.deming.deming(x, y, error_ratio=1.0, ci=0.95)",
+      "returns": "Same dict structure as passing_bablok",
+      "algorithm": "Linnet 1990 formula with jackknife CIs"
+    },
+    "weighted_deming": {
+      "function": "analysis.deming.weighted_deming(x, y, error_ratio=1.0, ci=0.95)",
+      "returns": "Same dict structure as passing_bablok",
+      "algorithm": "Linnet 1990 weighted formula, weights = 1/(x^2 + y^2/lambda)"
+    },
+    "confusion_matrix": {
+      "function": "analysis.confusion.build_count_matrix(x, y, step, x_min, x_max, y_min, y_max)",
+      "returns": "(matrix ndarray, x_bins ndarray, y_bins ndarray) — always square symmetric",
+      "colour_encoding": "Distance from identity diagonal, not count"
+    },
+    "precision_ep15a3": {
+      "function": "analysis.precision.compute_precision(data, alpha, n_levels, claimed_sr, claimed_sl)",
+      "returns": "dict: sr, sb, sl, cv_r, cv_l, df_within, df_between, T, verif_sr, verif_sl, pass_sr, pass_sl, day_summary, outliers",
+      "standard": "CLSI EP15-A3 2014"
+    }
+  },
+
+  "streamlit_session_state": {
+    "reg_res": "Regression result dict (set on Analyze click, regression branch only)",
+    "stats": "Summary statistics dict (set on Analyze click, regression branch only)",
+    "x_raw": "numpy array — reference method values (regression branch only)",
+    "y_raw": "numpy array — candidate method values (regression branch only)",
+    "reg_method": "String — method label for display (regression branch only)"
+  },
+
+  "external_services": {
+    "streamlit_community_cloud": {
+      "purpose": "Public deployment / hosting",
+      "url": "UNKNOWN — REQUIRES USER VERIFICATION",
+      "keep_awake": "GitHub Actions workflow + Playwright"
+    }
+  },
+
+  "environment_variables": {},
+  "api_keys": {},
+  "database": "none",
+  "authentication": "none",
+
+  "decimal_convention": "Comma as decimal separator (Swedish locale). fmt(v, d) returns f'{v:.{d}f}'.replace('.', ',')",
+  "default_decimals_regression": 2,
+  "default_decimals_precision": 4,
+
+  "image_export": {
+    "engine": "matplotlib (NOT kaleido — kaleido crashes on target Windows environment)",
+    "regression_physical_size": "18 x 13 cm",
+    "confusion_cell_size": "6 mm per cell",
+    "dpi_options": [150, 300, 600]
+  },
+
+  "known_issues": [
+    {
+      "id": "BUG-001",
+      "description": "Dead code: _read_excel() function defined at app.py lines 110-113, never called",
+      "urgency": "low"
+    },
+    {
+      "id": "BUG-002",
+      "description": "Passing-Bablok O(n^2) pairwise slope computation — slow for n > 500",
+      "urgency": "medium"
+    },
+    {
+      "id": "BUG-003",
+      "description": "Decimal default inconsistency: regression=2, precision=4",
+      "urgency": "low"
+    },
+    {
+      "id": "BUG-004",
+      "description": "No automated tests for Deming, confusion matrix, or precision modules",
+      "urgency": "medium"
+    },
+    {
+      "id": "TECH-DEBT-002",
+      "description": "Unused kaleido functions in export.py (_sanitize_fig, fig_to_png_bytes, etc.)",
+      "urgency": "low"
+    }
+  ],
+
+  "feature_status": {
+    "passing_bablok_regression": "working",
+    "deming_regression_ordinary": "working",
+    "deming_regression_weighted": "working",
+    "bland_altman_plot": "working",
+    "confidence_interval_band": "working",
+    "confusion_matrix": "working",
+    "essential_agreement": "working",
+    "categorical_agreement_eucast_clsi": "working",
+    "precision_ep15a3": "working",
+    "chi_square_verification": "working",
+    "row_filter_by_category": "working",
+    "png_export_300dpi": "working",
+    "svg_export": "working",
+    "html_report": "working",
+    "csv_export": "working",
+    "journal_precision_table": "working",
+    "github_actions_keep_awake": "working — requires manual STREAMLIT_URL variable setup",
+    "streamlit_password_protection": "not_implemented"
+  }
+}

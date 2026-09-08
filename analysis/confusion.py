@@ -179,18 +179,30 @@ def categorical_agreement(
     agree = cats_x == cats_y
     n_ca  = int(np.sum(agree))
 
-    # Very major error: reference S, candidate R
-    n_vme = int(np.sum((cats_x == "S") & (cats_y == "R")))
-    # Major error: reference R, candidate S
-    n_me  = int(np.sum((cats_x == "R") & (cats_y == "S")))
-    # Minor errors: everything else that disagrees
+    # Very major error (VME) = FALSE SUSCEPTIBILITY
+    #   reference = R, candidate = S
+    #   Expressed as a percentage of RESISTANT isolates by the reference.
+    #   Clinically the most dangerous error: an ineffective drug is reported
+    #   as active. CLSI/FDA limit: <= 1.5-3 %.
+    n_vme = int(np.sum((cats_x == "R") & (cats_y == "S")))
+
+    # Major error (ME) = FALSE RESISTANCE
+    #   reference = S, candidate = R
+    #   Expressed as a percentage of SUSCEPTIBLE isolates by the reference.
+    #   CLSI/FDA limit: <= 3 %.
+    n_me  = int(np.sum((cats_x == "S") & (cats_y == "R")))
+
+    # Minor errors: any remaining disagreement (involves the I category)
     n_min = int(np.sum(~agree)) - n_vme - n_me
 
     n_s_ref = int(np.sum(cats_x == "S"))
     n_r_ref = int(np.sum(cats_x == "R"))
 
-    denom_vme = n_s_ref if n_s_ref > 0 else 1
-    denom_me  = n_r_ref if n_r_ref > 0 else 1
+    # Denominators follow CLSI/FDA convention:
+    #   VME rate = n_vme / (resistant by reference)
+    #   ME  rate = n_me  / (susceptible by reference)
+    denom_vme = n_r_ref if n_r_ref > 0 else 1
+    denom_me  = n_s_ref if n_s_ref > 0 else 1
 
     return {
         "ca":       n_ca / n * 100,

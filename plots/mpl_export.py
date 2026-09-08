@@ -208,30 +208,33 @@ def render_ba_png(
     ax.scatter(means, diffs, color=sc[:3], alpha=sc[3], s=40,
                linewidths=0.5, edgecolors="white", zorder=3)
 
-    # Labels placed inside the axes at 97% of x range, anchored above/below the line
-    x_range = rx_max - rx_min
-    label_x = rx_min + x_range * 0.97
+    # Reference lines. Labels sit OUTSIDE the right edge of the axes so they can
+    # never cover a data point. get_yaxis_transform() -> x in axes fraction,
+    # y in data units; clip_on=False lets the text render past the frame.
+    _lbl_tf = ax.get_yaxis_transform()
 
-    for y_val, color, style, lw, lbl, va in [
-        (mean_d, color_mean, "-",   2.0, f"{label_mean}: {_f(mean_d)}{suffix}",      "bottom"),
-        (loa_hi, color_loa,  "--", 1.5, f"{label_loa_upper}: {_f(loa_hi)}{suffix}", "top"),
-        (loa_lo, color_loa,  "--", 1.5, f"{label_loa_lower}: {_f(loa_lo)}{suffix}", "bottom"),
-        (0,      "#9CA3AF",  ":",  1.0, "",                                           "bottom"),
+    for y_val, color, style, lw, lbl in [
+        (mean_d, color_mean, "-",  2.0, f"{label_mean}: {_f(mean_d)}{suffix}"),
+        (loa_hi, color_loa,  "--", 1.5, f"{label_loa_upper}: {_f(loa_hi)}{suffix}"),
+        (loa_lo, color_loa,  "--", 1.5, f"{label_loa_lower}: {_f(loa_lo)}{suffix}"),
+        (0,      "#9CA3AF",  ":",  1.0, ""),
     ]:
-        ax.axhline(y_val, color=color, linestyle=style, linewidth=lw, zorder=2)
+        ax.axhline(y_val, color=color, linestyle=style, linewidth=lw,
+                   alpha=0.45, zorder=2)
         if lbl:
-            ax.text(label_x, y_val, lbl,
-                    va=va, ha="right",
+            ax.text(1.015, y_val, lbl,
+                    transform=_lbl_tf,
+                    va="center", ha="left",
                     fontsize=9, fontweight="bold",
-                    color=color, zorder=5,
-                    bbox=dict(boxstyle="round,pad=0.2",
-                              facecolor="white", edgecolor="none", alpha=0.80))
+                    color=color, zorder=5, clip_on=False)
 
     ax.set_xlim(rx_min, rx_max)
     ax.set_ylim(ry_min, ry_max)
     ax.set_xlabel("Mean", fontsize=11, labelpad=8)
     ax.set_ylabel(y_title, fontsize=11, labelpad=8)
     ax.set_title(ba_title, fontsize=13, fontweight="bold", pad=12)
+    # Shrink the axes so the outside labels fit within the saved image
+    fig.subplots_adjust(right=0.78)
     ax.set_facecolor("white")
     fig.patch.set_facecolor("white")
     ax.grid(True, color="#EEEEEE", linewidth=0.8, zorder=0)

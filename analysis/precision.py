@@ -117,13 +117,23 @@ def compute_precision(
     cv_l = float(sl / grand_mean * 100) if grand_mean != 0 else float("nan")
 
     # ── effective degrees of freedom for sl (Welch-Satterthwaite) ─────────────
-    # T = (sr²/n + sb²)² / ( (sr²/n)²/D(n-1) + sb⁴/(D-1) )
-    term1 = sr2 / n
-    term2 = sb2
-    numer  = (term1 + term2) ** 2
-    denom_t1 = term1 ** 2 / df_within if df_within > 0 else 0
-    denom_t2 = sb2 ** 2 / df_between if (df_between > 0 and sb2 > 0) else 0
-    T = float(numer / (denom_t1 + denom_t2)) if (denom_t1 + denom_t2) > 0 else float(df_within)
+    # Sl² is the linear combination  ((n-1)/n)·Sr²  +  s_day²
+    #   Sr²     has df = D(n-1)
+    #   s_day²  has df = D-1
+    # T = (c1·Sr² + s_day²)² / ( (c1·Sr²)²/(D(n-1)) + (s_day²)²/(D-1) )
+    # This is algebraically identical to EP15-A2/A3 equation 9:
+    #   T = ((n-1)·Sr² + n·s_day²)² /
+    #       ( ((n-1)/D)·Sr⁴ + n²·(s_day²)²/(D-1) )
+    # Verified against Chesher D, Clin Biochem Rev 2008;29(Suppl i):S23-S26
+    # worked example -> T = 12.10 (paper prints 12.1).
+    _c1 = (n - 1) / n
+    _t1 = _c1 * sr2          # within-run contribution to Sl²
+    _t2 = s_day2             # day-mean variance (NOT the truncated component)
+    numer   = (_t1 + _t2) ** 2
+    denom_1 = (_t1 ** 2) / df_within  if df_within  > 0 else 0.0
+    denom_2 = (_t2 ** 2) / df_between if df_between > 0 else 0.0
+    _den = denom_1 + denom_2
+    T = float(numer / _den) if _den > 0 else float(df_within)
 
     # ── chi-square verification (EP15-A3 §2.4.3) ──────────────────────────────
     q = n_levels

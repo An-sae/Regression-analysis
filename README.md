@@ -91,8 +91,8 @@ pb_tool/
 | **Essential Agreement ±1 mm** | % of isolates where \|x − y\| ≤ 1 mm |
 | **Essential Agreement ±2 mm** | % of isolates where \|x − y\| ≤ 2 mm |
 | **Categorical Agreement** | % of isolates assigned the same S/I/R category by both methods |
-| **Very Major Error (VME)** | Reference = S, candidate = R; expressed as % of S isolates |
-| **Major Error (ME)** | Reference = R, candidate = S; expressed as % of R isolates |
+| **Very Major Error (VME)** | False susceptibility: reference = R, candidate = S; expressed as % of **resistant** isolates |
+| **Major Error (ME)** | False resistance: reference = S, candidate = R; expressed as % of **susceptible** isolates |
 
 Breakpoints for categorical classification are entered per method (separate S and R thresholds for x and y) and support both EUCAST and CLSI systems.
 
@@ -102,8 +102,8 @@ Breakpoints for categorical classification are entered per method (separate S an
 |---|---|---|
 | Essential Agreement ±2 mm | ≥ 90 % | ≥ 90 % |
 | Categorical Agreement | ≥ 90 % | ≥ 90 % |
-| Very Major Error | ≤ 3 % of S isolates | ≤ 1.5 % |
-| Major Error | ≤ 3 % of R isolates | ≤ 3 % |
+| Very major error (R→S) | ≤ 3 % of **R** isolates | ≤ 1.5 % of **R** |
+| Major error (S→R) | ≤ 3 % of **S** isolates | ≤ 3 % of **S** |
 
 ### Bland–Altman plot
 - Y-axis: absolute difference (y − x) **or** percentage difference ((y − x) / mean × 100 %)

@@ -49,49 +49,68 @@ def passing_bablok(
     if n < 3:
         raise ValueError(f"Need at least 3 valid observations; got {n}.")
 
-    # Compute all pairwise slopes S_ij = (y_j - y_i) / (x_j - x_i) for j > i
+    # ── Pairwise slopes S_ij = (y_j - y_i)/(x_j - x_i) for j > i ─────────────
+    # Handling of degenerate pairs follows Passing & Bablok (1983):
+    #   x_i == x_j and y_i == y_j  ->  0/0, excluded entirely
+    #   x_i == x_j and y_i <  y_j  ->  +infinity, represented by +L
+    #   x_i == x_j and y_i >  y_j  ->  -infinity, represented by -L
+    #   s_ij == -1                 ->  excluded (keeps x/y interchangeable)
+    # L is arbitrary; it only has to sort beyond every finite slope.
+    L = 1.0e6
     slopes = []
     for i in range(n):
         for j in range(i + 1, n):
             dx = x[j] - x[i]
-            if dx == 0.0:
-                # Undefined slope — skip (vertical pair)
-                continue
-            s = (y[j] - y[i]) / dx
+            dy = y[j] - y[i]
+            if dx == 0.0 and dy == 0.0:
+                continue                      # identical points: 0/0
+            elif dx == 0.0:
+                s = L if dy > 0 else -L       # vertical pair
+            else:
+                s = dy / dx
+            if s == -1.0:
+                continue                      # excluded by the method
             slopes.append(s)
 
     slopes = np.sort(np.array(slopes, dtype=float))
-    m = len(slopes)
+    N = len(slopes)
 
-    if m == 0:
-        raise ValueError("All x values are identical; slope is undefined.")
+    if N == 0:
+        raise ValueError("No usable pairwise slopes; slope is undefined.")
 
-    # Count slopes < -1 (K in the original paper)
+    # K = number of slopes below -1 (the offset that makes x and y
+    # interchangeable — Passing & Bablok 1983)
     K = int(np.sum(slopes < -1.0))
 
-    # Median slope (adjusted index per Passing–Bablok)
-    if m % 2 == 1:
-        slope = slopes[(m - 1) // 2 + K]
-    else:
-        mid = m // 2
-        slope = 0.5 * (slopes[mid - 1 + K] + slopes[mid + K])
+    # ── Shifted median ───────────────────────────────────────────────────────
+    # N odd  = 2m+1 -> the (m+1+K)-th smallest      -> 0-based index m+K
+    # N even = 2m   -> mean of (m+K)-th & (m+1+K)-th -> 0-based m+K-1, m+K
+    def _at(rank0):
+        return slopes[max(0, min(rank0, N - 1))]
 
-    # Intercept
+    if N % 2 == 1:
+        _m = (N - 1) // 2
+        slope = _at(_m + K)
+    else:
+        _m = N // 2
+        slope = 0.5 * (_at(_m - 1 + K) + _at(_m + K))
+
+    # Intercept: median of (y_i - b*x_i)
     intercept = float(np.median(y - slope * x))
 
-    # 95 % CI via rank-based method
+    # ── Rank-based confidence interval ───────────────────────────────────────
+    # c  = z * sqrt( n(n-1)(2n+5) / 18 )
+    # M1 = round((N - c)/2)      M2 = N - M1 + 1        (both 1-based RANKS)
+    # b_lower = (M1+K)-th smallest      b_upper = (M2+K)-th smallest
+    # Ranks are 1-based, so subtract 1 to index the sorted array.
     z = _z_score(ci)
-    w = z * np.sqrt(n * (n - 1) * (2 * n + 5) / 18.0)
+    c = z * np.sqrt(n * (n - 1) * (2 * n + 5) / 18.0)
 
-    M1 = int(np.round((m - w) / 2.0))
-    M2 = m - M1 + 1
+    M1 = int(np.round((N - c) / 2.0))
+    M2 = N - M1 + 1
 
-    # Clamp indices
-    M1 = max(0, min(M1, m - 1))
-    M2 = max(0, min(M2, m - 1))
-
-    slope_lower = float(slopes[M1 + K])
-    slope_upper = float(slopes[M2 + K])
+    slope_lower = float(_at(M1 + K - 1))
+    slope_upper = float(_at(M2 + K - 1))
 
     intercept_lower = float(np.median(y - slope_upper * x))
     intercept_upper = float(np.median(y - slope_lower * x))
