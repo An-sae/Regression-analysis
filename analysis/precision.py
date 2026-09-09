@@ -116,6 +116,26 @@ def compute_precision(
     cv_r = float(sr / grand_mean * 100) if grand_mean != 0 else float("nan")
     cv_l = float(sl / grand_mean * 100) if grand_mean != 0 else float("nan")
 
+    # ── Simple ("pooled") SD over ALL measurements ────────────────────────────
+    # The day structure is ignored and every result is treated as one sample:
+    #     s_total = sqrt( SUM(x - grand_mean)^2 / (D*n - 1) )
+    # Annals of Laboratory Medicine calls this the "simplified approach":
+    # data are combined and treated as a single dataset, which requires equal
+    # subgroup sizes to be valid.
+    #
+    # Relationship to the ANOVA result (exact, in expectation):
+    #     E[s_total^2] = Sr^2 + [ (D-1)n / (Dn-1) ] * Sb^2
+    # so the simple SD is an UNBIASED estimate only when Sb^2 = 0 and is
+    # otherwise biased LOW, because the between-day component is shrunk by
+    # the factor below. It is reported for reference, not as a substitute
+    # for the CLSI within-laboratory SD.
+    n_total_meas = int(D * n)
+    all_vals = matrix.ravel()
+    pooled_sd = float(np.std(all_vals, ddof=1)) if n_total_meas > 1 else 0.0
+    pooled_cv = (float(pooled_sd / grand_mean * 100)
+                 if grand_mean != 0 else float("nan"))
+    shrink = ((D - 1) * n) / (D * n - 1) if (D * n - 1) > 0 else float("nan")
+
     # ── effective degrees of freedom for sl (Welch-Satterthwaite) ─────────────
     # Sl² is the linear combination  ((n-1)/n)·Sr²  +  s_day²
     #   Sr²     has df = D(n-1)
@@ -203,6 +223,13 @@ def compute_precision(
         "sl":           sl,
         "sl2":          float(sl2),
         "cv_l":         cv_l,
+
+        # Simple pooled SD over all measurements (day structure ignored)
+        "pooled_sd":    pooled_sd,
+        "pooled_cv":    pooled_cv,
+        "pooled_df":    n_total_meas - 1,
+        "n_total_meas": n_total_meas,
+        "pooled_shrink": float(shrink),
 
         # Verification
         "alpha":        alpha,

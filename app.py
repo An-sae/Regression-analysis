@@ -250,14 +250,14 @@ with st.sidebar:
                     st.markdown("**Column mapping — File A**")
                     _ca2=st.columns(3)
                     _id_a =_ca2[0].selectbox("Sample ID",list(_lf_df_a.columns),key="lf_ida")
-                    _an_a =_ca2[1].selectbox("Analysis (or N/A)",["N/A"]+list(_lf_df_a.columns),key="lf_ana")
+                    _an_a =_ca2[1].selectbox("Analysis",["N/A"]+list(_lf_df_a.columns),key="lf_ana")
                     _rs_a =_ca2[2].selectbox("Result",list(_lf_df_a.columns),
                                               index=min(2,len(_lf_df_a.columns)-1),key="lf_rsa")
                     _lf_label_a=st.text_input("Label A","Reference",key="lf_la")
                     st.markdown("**Column mapping — File B**")
                     _cb2=st.columns(3)
                     _id_b =_cb2[0].selectbox("Sample ID",list(_lf_df_b.columns),key="lf_idb")
-                    _an_b =_cb2[1].selectbox("Analysis (or N/A)",["N/A"]+list(_lf_df_b.columns),key="lf_anb")
+                    _an_b =_cb2[1].selectbox("Analysis",["N/A"]+list(_lf_df_b.columns),key="lf_anb")
                     _rs_b =_cb2[2].selectbox("Result",list(_lf_df_b.columns),
                                               index=min(2,len(_lf_df_b.columns)-1),key="lf_rsb")
                     _lf_label_b=st.text_input("Label B","Candidate",key="lf_lb")
@@ -954,31 +954,6 @@ if analysis_type in ("Passing–Bablok","Deming"):
         build_html_report(rr,ss,fig_pb,fig_ba,x_label=x_label,y_label=y_label),
         "report.html","text/html",key="rhtml")
 
-    # ── Point-level data with Included/Excluded status ────────────────────────
-    st.markdown("**Point-level data**")
-    _pt_rows = []
-    for _i in range(_n_all):
-        _xi = float(_x_all[_i]); _yi = float(_y_all[_i])
-        _pt_rows.append({
-            "Point":      _i + 1,
-            x_label:      fmt(_xi, decimals),
-            y_label:      fmt(_yi, decimals),
-            "Difference": fmt(_yi - _xi, decimals),
-            "Mean":       fmt((_xi + _yi) / 2.0, decimals),
-            "Status":     "Excluded" if _i in _excl else "Included",
-        })
-    _pt_df = pd.DataFrame(_pt_rows)
-
-    _pc1, _pc2, _ = st.columns([1, 1, 2])
-    _pc1.download_button(
-        "📥 Point-level CSV (with status)",
-        to_csv_bytes(_pt_df),
-        "data_points.csv", "text/csv", key="ptcsv")
-    _pc2.caption(f"{len(_kept)} included · {len(_excl)} excluded · {_n_all} total")
-
-    with st.expander("👁 Preview point-level data"):
-        st.dataframe(_pt_df, use_container_width=True, hide_index=True)
-
     # ── Matched pairs Excel — rebuilt here so it reflects exclusions ──────────
     if _lf_mode=="Two long-format files (match by ID)" and _lf_report_df is not None:
         _rep_out = _lf_report_df.copy()
@@ -994,8 +969,6 @@ if analysis_type in ("Passing–Bablok","Deming"):
             if _pos < _n_all:
                 _rep_out.at[_ridx, "Status"] = (
                     "Excluded" if _pos in _excl else "Included")
-                _rep_out.at[_ridx, "Point"] = _pos + 1
-        _rep_out["Point"] = _rep_out.get("Point", pd.Series(dtype=object))
 
         _xlsx_out = build_matched_excel(
             _rep_out, _lf_label_a, _lf_label_b, _lf_analyte)
@@ -1010,9 +983,9 @@ if analysis_type in ("Passing–Bablok","Deming"):
             key="lf_dl_xlsx",
         )
         _fx2.caption(
-            f"Analyte: **{_lf_analyte}** — Sheet 1 matched pairs "
-            f"(with Point number and Included/Excluded status), "
-            f"Sheet 2 only in {_lf_label_a}, Sheet 3 only in {_lf_label_b}"
+            f"Analyte: **{_lf_analyte}** — Sheet 1 matched pairs with "
+            f"Included/Excluded status, Sheet 2 only in {_lf_label_a}, "
+            f"Sheet 3 only in {_lf_label_b}"
         )
 
 
@@ -1127,7 +1100,9 @@ else:
                     _pr_df = pd.read_csv(BytesIO(_pr_rb), sep=None, engine="python")
                 _pr_df.columns = [f"Column {i+1}" if str(c).strip().lstrip("-").isdigit()
                                    else str(c) for i,c in enumerate(_pr_df.columns)]
-                st.caption("Preview:"); st.dataframe(_pr_df.head(), use_container_width=True)
+                st.caption(f"Preview — {len(_pr_df)} replicates × "
+                           f"{len(_pr_df.columns)} days (all rows shown):")
+                st.dataframe(_pr_df, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df)
             except Exception as _e:
                 st.error(f"Could not read file: {_e}")
@@ -1144,7 +1119,9 @@ else:
                 if _pr_df2.shape[1] < 2:
                     _pr_df2 = pd.read_csv(_SIO(_pr_paste), sep="\t")
                 _pr_df2.columns = [str(c) for c in _pr_df2.columns]
-                st.caption("Preview:"); st.dataframe(_pr_df2.head(), use_container_width=True)
+                st.caption(f"Preview — {len(_pr_df2)} replicates × "
+                           f"{len(_pr_df2.columns)} days (all rows shown):")
+                st.dataframe(_pr_df2, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df2)
             except Exception as _e:
                 st.error(f"Could not parse: {_e}")
@@ -1176,7 +1153,7 @@ else:
                                                     ["N/A"]+_lf_pr_cols,key="lf_pr_sort")
                 _lf_pr_sort=None if _lf_pr_sort_col=="N/A" else _lf_pr_sort_col
                 _an_cols=[c for c in _lf_pr_cols if c not in [_lf_pr_id_col,_lf_pr_res_col]]
-                _lf_pr_an_col=st.selectbox("Analysis column (optional)",
+                _lf_pr_an_col=st.selectbox("Analysis",
                                             ["N/A"]+_an_cols,key="lf_pr_an")
                 _lf_pr_analyte=None
                 if _lf_pr_an_col != "N/A":
@@ -1306,6 +1283,48 @@ else:
             "(CLSI EP15-A3). It usually means there is no detectable "
             "day-to-day effect — check that your days are grouped correctly.")
 
+    # ── Simple pooled SD/CV, shown beneath the CLSI figures ──────────────────
+    st.markdown("")
+    st.markdown("""
+<div style="background:#F8FAFC;border-radius:12px;padding:16px 24px;
+            border:1px solid #E2E8F0;border-left:4px solid #94A3B8">
+<p style="margin:0;font-size:0.78rem;color:#475569;font-weight:600;letter-spacing:0.05em">
+TOTAL IMPRECISION — SIMPLE POOLED CALCULATION (all {nm} results as one set)</p>
+<p style="margin:4px 0 0;font-size:1.5rem;font-weight:700;color:#334155">
+CV = {cv} %</p>
+<p style="margin:2px 0 0;font-size:1rem;color:#64748B">SD = {sd}</p>
+<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">
+df = {df} &nbsp;|&nbsp; ordinary SD of every measurement, day structure ignored</p>
+</div>
+""".format(nm=_pr["n_total_meas"], cv=_pf(_pr["pooled_cv"]),
+           sd=_pf(_pr["pooled_sd"]), df=_pr["pooled_df"]),
+        unsafe_allow_html=True)
+
+    with st.expander("ℹ️ Why does this differ from the CLSI value?"):
+        st.markdown(f"""
+The **CLSI within-laboratory SD** separates the data into a within-run and a
+between-day component and adds them on the variance scale
+(Sl² = Sr² + Sb²). The **simple pooled SD** ignores the day structure and
+treats all {_pr['n_total_meas']} results as a single sample.
+
+The two are related exactly, in expectation, by
+
+E[s²pooled] = Sr² + **{_pr['pooled_shrink']:.4f}** × Sb²  where the factor is (D−1)n / (Dn−1)
+
+So the simple calculation shrinks the between-day component by
+**{100*(1-_pr['pooled_shrink']):.1f} %** with your design of
+{_pr['D']} days × {_pr['n']} replicates. Consequences:
+
+- If there is **no** day-to-day effect (Sb² = 0) the two agree closely.
+- If a real day effect exists, the pooled value is **biased low** and
+  understates the imprecision a clinician would encounter between days.
+- The gap narrows as the number of days increases.
+
+Report the **CLSI value** for method validation and verification against a
+manufacturer's claim. The pooled figure is provided for reference and for
+comparison with sources that use the simplified approach.
+""")
+
     st.markdown("")   # spacer
 
     # ── Full breakdown table ──────────────────────────────────────────────────
@@ -1326,6 +1345,11 @@ else:
              "CV (%)": _pf(_pr["cv_l"]),
              "Variance (SD²)": _pf(_pr["sl2"]),
              "df":     f"{_pr['T']:.1f} (eff.)"},
+            {"Component": "Simple pooled (all results)",
+             "SD":     _pf(_pr["pooled_sd"]),
+             "CV (%)": _pf(_pr["pooled_cv"]),
+             "Variance (SD²)": _pf(_pr["pooled_sd"]**2),
+             "df":     str(_pr["pooled_df"])},
         ]), use_container_width=True, hide_index=True)
 
     # ── Verification against manufacturer claims ──────────────────────────────
@@ -1404,6 +1428,9 @@ else:
         {"Day": "Within-laboratory (total)ᵇ",
          **{f"Rep {i+1}": "" for i in range(_n_reps)},
          "Mean": "", "SD": _pf(_pr["sl"]), "CV (%)": _pf(_pr["cv_l"])},
+        {"Day": "Simple pooled (all results)ᵈ",
+         **{f"Rep {i+1}": "" for i in range(_n_reps)},
+         "Mean": "", "SD": _pf(_pr["pooled_sd"]), "CV (%)": _pf(_pr["pooled_cv"])},
     ]
     if prec_claimed_sr is not None:
         _footer.append({
@@ -1431,6 +1458,11 @@ else:
         f"(effective df = {_pr['T']:.1f}; includes between-day variation).",
         f"  Grand mean = {_pf(_pr['grand_mean'])}, "
         f"D = {_pr['D']} days, n = {_pr['n']} replicates/day.",
+        f"ᵈ Ordinary SD of all {_pr['n_total_meas']} results, day structure "
+        f"ignored (df = {_pr['pooled_df']}). Shown for reference; it shrinks "
+        f"the between-day component by a factor "
+        f"{_pr['pooled_shrink']:.3f} and is therefore biased low when a "
+        f"day effect exists.",
     ]
     if prec_claimed_sr is not None or prec_claimed_sl is not None:
         _footnotes.append(

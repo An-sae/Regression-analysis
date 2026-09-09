@@ -169,28 +169,56 @@ def build_matched_excel(report_df, label_a="Method A", label_b="Method B", analy
     import openpyxl
     from openpyxl.styles import PatternFill, Font, Alignment
     from openpyxl.utils.dataframe import dataframe_to_rows
-    GREEN  = PatternFill("solid", fgColor="D1FAE5")
-    YELLOW = PatternFill("solid", fgColor="FEF3C7")
-    HDR_FILL = PatternFill("solid", fgColor="1E40AF")
-    HDR_FONT = Font(color="FFFFFF", bold=True)
+    GREEN     = PatternFill("solid", fgColor="D1FAE5")   # included
+    RED       = PatternFill("solid", fgColor="FECACA")   # excluded
+    YELLOW    = PatternFill("solid", fgColor="FEF3C7")   # unmatched
+    HDR_FILL  = PatternFill("solid", fgColor="1E40AF")
+    HDR_FONT  = Font(color="FFFFFF", bold=True)
+    RED_FONT  = Font(color="991B1B", bold=True)          # dark red, bold
+    GREEN_FONT= Font(color="065F46")                     # dark green
 
-    def _sheet(ws, df, fill, title):
+    def _sheet(ws, df, fill, title, status_aware=False):
+        """status_aware: colour each row by its Status column
+           (Excluded -> red, otherwise green) instead of one flat fill."""
         ws.title = title
         if df.empty:
             ws.append([f"No rows: {title}"]); return
+
+        cols = list(df.columns)
+        status_i = cols.index("Status") + 1 if (status_aware and "Status" in cols) else None
+
         for ri, row in enumerate(dataframe_to_rows(df, index=False, header=True), 1):
             ws.append(row)
+            if ri == 1:
+                for cell in ws[ri]:
+                    cell.fill = HDR_FILL
+                    cell.font = HDR_FONT
+                    cell.alignment = Alignment(horizontal="center")
+                continue
+
+            row_fill, row_font = fill, None
+            if status_i is not None:
+                val = ws.cell(row=ri, column=status_i).value
+                if str(val).strip().lower() == "excluded":
+                    row_fill, row_font = RED, RED_FONT
+                else:
+                    row_fill, row_font = GREEN, GREEN_FONT
+
             for cell in ws[ri]:
-                if ri == 1: cell.fill = HDR_FILL; cell.font = HDR_FONT; cell.alignment = Alignment(horizontal="center")
-                else: cell.fill = fill
+                cell.fill = row_fill
+                if row_font is not None:
+                    cell.font = row_font
+
+        ws.freeze_panes = "A2"
         for col in ws.columns:
-            ws.column_dimensions[col[0].column_letter].width = min(max(len(str(c.value or "")) for c in col)+4, 40)
+            ws.column_dimensions[col[0].column_letter].width = min(
+                max(len(str(c.value or "")) for c in col) + 4, 40)
 
     wb = openpyxl.Workbook()
     matched = report_df[report_df["Match"]=="Matched"].drop(columns=["Match"])
     only_a  = report_df[report_df["Match"]=="Only in A"].drop(columns=[label_b,"Match"], errors="ignore")
     only_b  = report_df[report_df["Match"]=="Only in B"].drop(columns=[label_a,"Match"], errors="ignore")
-    _sheet(wb.active,                    matched, GREEN,  "Matched pairs")
+    _sheet(wb.active, matched, GREEN, "Matched pairs", status_aware=True)
     _sheet(wb.create_sheet("Only in A"), only_a,  YELLOW, "Only in A")
     _sheet(wb.create_sheet("Only in B"), only_b,  YELLOW, "Only in B")
     buf = io.BytesIO(); wb.save(buf); buf.seek(0); return buf.read()
@@ -228,6 +256,9 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
         ["Between-day SD (Sb)", _f(pr_results["sb"])],
         ["Within-lab SD (Sl)", _f(pr_results["sl"])],
         ["Within-lab CV (%)", _f(pr_results["cv_l"])], [],
+        ["Simple pooled SD (all results)", _f(pr_results.get("pooled_sd", 0))],
+        ["Simple pooled CV (%)", _f(pr_results.get("pooled_cv", 0))],
+        ["Pooled df", str(pr_results.get("pooled_df", ""))], [],
         ["Reference", "CLSI EP15-A3 (2014)"],
     ]
     for ri, row in enumerate(rows2, 1):
