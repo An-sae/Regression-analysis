@@ -245,27 +245,83 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
     for col in ws1.columns:
         ws1.column_dimensions[col[0].column_letter].width=18
 
-    ws2 = wb.create_sheet("Precision summary")
-    rows2 = [
-        ["Sample ID", sample_id], ["Analyte", analyte],
-        ["Grand mean", _f(pr_results["grand_mean"])],
-        ["Days (D)", str(pr_results["D"])],
-        ["Replicates/day (n)", str(pr_results["n"])], [],
-        ["Within-run SD (Sr)", _f(pr_results["sr"])],
-        ["Within-run CV (%)", _f(pr_results["cv_r"])],
-        ["Between-day SD (Sb)", _f(pr_results["sb"])],
-        ["Within-lab SD (Sl)", _f(pr_results["sl"])],
-        ["Within-lab CV (%)", _f(pr_results["cv_l"])], [],
-        ["Simple pooled SD (all results)", _f(pr_results.get("pooled_sd", 0))],
-        ["Simple pooled CV (%)", _f(pr_results.get("pooled_cv", 0))],
-        ["Pooled df", str(pr_results.get("pooled_df", ""))], [],
-        ["Reference", "CLSI EP15-A3 (2014)"],
+    # ── Sheet 2: sammanfattning i laboratoriets tabellformat ─────────────
+    from openpyxl.styles import Border, Side
+
+    ws2 = wb.create_sheet("Sammanfattning")
+
+    HDR_BG   = PatternFill("solid", fgColor="000000")   # svart rubrikrad
+    LBL_BG   = PatternFill("solid", fgColor="DCE6F1")   # ljusbla etiketter
+    VAL_BG   = PatternFill("solid", fgColor="FFFFFF")
+    PREC_BG  = PatternFill("solid", fgColor="FFF2CC")   # markera precisionsraderna
+    WHITE_B  = Font(color="FFFFFF", bold=True, size=11)
+    LBL_F    = Font(bold=True, size=11)
+    VAL_F    = Font(size=11)
+    thin     = Side(style="thin", color="000000")
+    BORDER   = Border(left=thin, right=thin, top=thin, bottom=thin)
+    CENTER   = Alignment(horizontal="center", vertical="center")
+    RIGHT    = Alignment(horizontal="right",  vertical="center")
+
+    def _pct(v):
+        return f"{v:.1f}".replace(".", ",") + "%"
+
+    title_left  = analyte  or "Analys"
+    title_right = sample_id or "Kontroll"
+
+    rows = [
+        ("Antal:",                    str(pr_results["n_total_meas"]),      False),
+        ("MV:",                       _f(pr_results["grand_mean"]),         False),
+        ("SD:",                       _f(pr_results.get("pooled_sd", 0.0)), False),
+        ("CV%:",                      _pct(pr_results.get("pooled_cv", 0.0)), False),
+        ("Min:",                      _f(pr_results.get("overall_min", 0.0)), False),
+        ("Max:",                      _f(pr_results.get("overall_max", 0.0)), False),
+        ("Inomserieprecision CV%:",   _pct(pr_results["cv_r"]),             True),
+        ("Totalimprecision CV%:",     _pct(pr_results["cv_l"]),             True),
     ]
-    for ri, row in enumerate(rows2, 1):
-        ws2.append(row)
-        if row:
-            ws2[ri][0].font = Font(bold=True)
-            for cell in ws2[ri]: cell.fill = GREEN
-    ws2.column_dimensions["A"].width=30; ws2.column_dimensions["B"].width=22
+
+    # Rubrikrad
+    ws2.cell(row=1, column=1, value=title_left)
+    ws2.cell(row=1, column=2, value=title_right)
+    for c in (1, 2):
+        cell = ws2.cell(row=1, column=c)
+        cell.fill = HDR_BG; cell.font = WHITE_B
+        cell.alignment = CENTER; cell.border = BORDER
+    ws2.row_dimensions[1].height = 30
+
+    # Datarader
+    for i, (label, value, is_prec) in enumerate(rows, start=2):
+        lc = ws2.cell(row=i, column=1, value=label)
+        vc = ws2.cell(row=i, column=2, value=value)
+        lc.fill = PREC_BG if is_prec else LBL_BG
+        vc.fill = PREC_BG if is_prec else VAL_BG
+        lc.font = LBL_F;  vc.font = LBL_F if is_prec else VAL_F
+        lc.alignment = RIGHT; vc.alignment = CENTER
+        lc.border = BORDER;   vc.border = BORDER
+        ws2.row_dimensions[i].height = 19
+
+    ws2.column_dimensions["A"].width = 26
+    ws2.column_dimensions["B"].width = 18
+
+    # Fotnot med programversion och uppläggning
+    fr = len(rows) + 3
+    try:
+        import sys as _sys, os as _os
+        _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+        from version import stamp as _stamp
+        _v = _stamp()
+    except Exception:
+        _v = ""
+    notes = [
+        f"Uppläggning: {pr_results['D']} dagar x {pr_results['n']} replikat "
+        f"({pr_results['n_total_meas']} matningar)",
+        "SD och CV% avser samtliga matningar sammanslagna.",
+        "Inomserieprecision och totalimprecision enligt CLSI EP15-A3.",
+        _v,
+    ]
+    for k, txt in enumerate(notes):
+        if not txt:
+            continue
+        c = ws2.cell(row=fr + k, column=1, value=txt)
+        c.font = Font(size=8, italic=True, color="595959")
 
     buf = io.BytesIO(); wb.save(buf); buf.seek(0); return buf.read()

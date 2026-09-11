@@ -13,6 +13,20 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+def _provenance_stamp(fig):
+    """Draw a small software-version stamp in the figure corner.
+    Required for ISO 15189 traceability: a figure in a validation report
+    must be attributable to the exact code version that produced it."""
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from version import stamp as _s
+        fig.text(0.005, 0.005, _s(), fontsize=5.5, color="#B0B7C3",
+                 ha="left", va="bottom")
+    except Exception:
+        pass
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _hex_to_rgba_mpl(hex_color: str, alpha: float):
@@ -248,6 +262,7 @@ def render_ba_png(
 
 def mpl_fig_to_png_bytes(fig, dpi: int = 300) -> bytes:
     buf = io.BytesIO()
+    _provenance_stamp(fig)
     fig.savefig(buf, format="png", dpi=dpi,
                 bbox_inches="tight", pad_inches=0.2,
                 facecolor="white")
@@ -258,6 +273,7 @@ def mpl_fig_to_png_bytes(fig, dpi: int = 300) -> bytes:
 
 def mpl_fig_to_svg_bytes(fig) -> bytes:
     buf = io.BytesIO()
+    _provenance_stamp(fig)
     fig.savefig(buf, format="svg",
                 bbox_inches="tight", pad_inches=0.2,
                 facecolor="white")

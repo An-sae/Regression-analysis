@@ -131,6 +131,8 @@ def compute_precision(
     # for the CLSI within-laboratory SD.
     n_total_meas = int(D * n)
     all_vals = matrix.ravel()
+    overall_min = float(np.min(all_vals))
+    overall_max = float(np.max(all_vals))
     pooled_sd = float(np.std(all_vals, ddof=1)) if n_total_meas > 1 else 0.0
     pooled_cv = (float(pooled_sd / grand_mean * 100)
                  if grand_mean != 0 else float("nan"))
@@ -229,6 +231,8 @@ def compute_precision(
         "pooled_cv":    pooled_cv,
         "pooled_df":    n_total_meas - 1,
         "n_total_meas": n_total_meas,
+        "overall_min":  overall_min,
+        "overall_max":  overall_max,
         "pooled_shrink": float(shrink),
 
         # Verification

@@ -310,6 +310,15 @@ def render_confusion_png(
             style="italic",
         )
 
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from version import stamp as _s
+        fig.text(0.005, 0.005, _s(), fontsize=5.5, color="#B0B7C3",
+                 ha="left", va="bottom")
+    except Exception:
+        pass
+
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi,
                 bbox_inches="tight", pad_inches=0.18, facecolor="white")
