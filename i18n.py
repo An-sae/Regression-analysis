@@ -514,4 +514,39 @@ SV = {
         "Ladda inte upp uppgifter som går att härleda till en enskild "
         "patient. Använd avidentifierade prov-ID och relativa dagnummer "
         "i stället för datum.",
+    # --- Dataskydd per driftmiljö ---------------------------------------------
+    "☁️ Web version — use anonymised or simulated data only.":
+        "☁️ Webbversion — använd endast avidentifierade eller simulerade data.",
+    "This web version runs on Streamlit Community Cloud, a public "
+    "service operated by a US company. Files you upload are sent "
+    "to and processed on servers outside the EU/EEA. The "
+    "application saves nothing itself, but the data is still "
+    "transferred and processed there.\n\n"
+    "Never upload data that can be traced to an individual "
+    "patient. Use simulated data, control material, or "
+    "anonymised files: replace sample IDs with sequence numbers "
+    "and dates with relative day numbers.\n\n"
+    "For verification work on real patient samples, use the "
+    "locally installed version.":
+        "Denna webbversion körs på Streamlit Community Cloud, en publik "
+        "tjänst som drivs av ett amerikanskt företag. Filer du laddar upp "
+        "skickas till och behandlas på servrar utanför EU/EES. Programmet "
+        "sparar ingenting själv, men uppgifterna överförs och behandlas "
+        "ändå där.\n\n"
+        "Ladda aldrig upp uppgifter som går att härleda till en enskild "
+        "patient. Använd simulerade data, kontrollmaterial eller "
+        "avidentifierade filer: ersätt prov-ID med löpnummer och datum "
+        "med relativa dagnummer.\n\n"
+        "Använd den lokalt installerade versionen för verifiering på "
+        "riktiga patientprov.",
+    "This version runs entirely in your web browser. Files you "
+    "open are processed on your own computer and are never sent "
+    "to any server. Nothing is saved when you close the page.\n\n"
+    "Still avoid data that can be traced to an individual "
+    "patient unless your local routines allow it.":
+        "Denna version körs helt i din webbläsare. Filer du öppnar "
+        "behandlas på din egen dator och skickas aldrig till någon "
+        "server. Ingenting sparas när du stänger sidan.\n\n"
+        "Undvik ändå uppgifter som går att härleda till en enskild "
+        "patient om inte era lokala rutiner tillåter det.",
 }

@@ -674,14 +674,50 @@ with st.sidebar:
 
     st.caption(f"**{version_string()}** · validerad {VALIDATED_ON}")
 
-    with st.expander(t("🔒 Data protection")):
-        st.caption(
-            t("The application runs locally on this computer. No data is sent "
-            "anywhere and the application stores nothing itself.\n\n"
-            "Do not upload data that can be traced back to an individual "
-            "patient. Use de-identified sample IDs and relative day numbers "
-            "instead of dates.")
-        )
+    # Where is the app actually running? The privacy statement must match.
+    #   browser : stlite/Pyodide - data never leaves the user's computer
+    #   cloud   : Streamlit Community Cloud (apps live under /mount/src)
+    #   local   : ordinary `streamlit run` on the user's own machine
+    # MCT_DEPLOYMENT=cloud|local|browser overrides the detection.
+    _dep = os.environ.get("MCT_DEPLOYMENT", "").strip().lower()
+    if _dep not in ("cloud", "local", "browser"):
+        if sys.platform == "emscripten":
+            _dep = "browser"
+        elif os.path.abspath(__file__).startswith("/mount/src"):
+            _dep = "cloud"
+        else:
+            _dep = "local"
+
+    if _dep == "cloud":
+        st.warning(t("☁️ Web version — use anonymised or simulated data only."))
+    with st.expander(t("🔒 Data protection"), expanded=(_dep == "cloud")):
+        if _dep == "cloud":
+            st.caption(t(
+                "This web version runs on Streamlit Community Cloud, a public "
+                "service operated by a US company. Files you upload are sent "
+                "to and processed on servers outside the EU/EEA. The "
+                "application saves nothing itself, but the data is still "
+                "transferred and processed there.\n\n"
+                "Never upload data that can be traced to an individual "
+                "patient. Use simulated data, control material, or "
+                "anonymised files: replace sample IDs with sequence numbers "
+                "and dates with relative day numbers.\n\n"
+                "For verification work on real patient samples, use the "
+                "locally installed version."))
+        elif _dep == "browser":
+            st.caption(t(
+                "This version runs entirely in your web browser. Files you "
+                "open are processed on your own computer and are never sent "
+                "to any server. Nothing is saved when you close the page.\n\n"
+                "Still avoid data that can be traced to an individual "
+                "patient unless your local routines allow it."))
+        else:
+            st.caption(t(
+                "The application runs locally on this computer. No data is "
+                "sent anywhere and the application stores nothing itself.\n\n"
+                "Do not upload data that can be traced back to an individual "
+                "patient. Use de-identified sample IDs and relative day "
+                "numbers instead of dates."))
 
     with st.expander(t("📚 References")):
         st.caption(
