@@ -11,30 +11,76 @@ import streamlit as st
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from analysis.regression import passing_bablok
-from analysis.deming     import deming, weighted_deming
-from analysis.statistics import summary_stats
-from plots.regression_plot import make_regression_plot, make_bland_altman_plot
-from analysis.export import results_to_csv, build_html_report, DPI_LABELS, dpi_from_label
-from plots.mpl_export import (
-    render_pb_png, render_ba_png, mpl_fig_to_png_bytes, mpl_fig_to_svg_bytes,
-)
-from analysis.confusion import build_count_matrix, essential_agreement, categorical_agreement
-from plots.confusion_plot import make_confusion_plot, render_confusion_png
-from analysis.fourfold import (fourfold, fourfold_from_arrays,
-                               check_prerequisites)
-from plots.fourfold_plot import fourfold_html, build_fourfold_excel
-from analysis.precision import compute_precision, precision_from_dataframe
-from version import VERSION, VALIDATED_ON, version_string, stamp
-from i18n import t, LANGUAGES, DEFAULT_LANG
-from analysis.file_reader import (list_sheets, guess_column, suggest_analyte,
-                                  parse_numeric as _parse_numeric)
-from analysis.data_loader import (
-    load_long_format, match_two_files, get_common_analytes,
-    find_duplicates, list_analytes, MultipleResultsError,
-    extract_precision_replicates,
-    build_matched_excel, build_precision_excel,
-)
+# ── Installationskontroll ────────────────────────────────────────────────────
+# Körs FÖRE programmets egna importer, så att en ofullständig uppladdning ger
+# ett begripligt besked i stället för ett tekniskt importfel.
+def _installation_check():
+    import hashlib, json
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        man = json.load(open(os.path.join(here, "manifest.json"), encoding="utf-8"))
+    except Exception:
+        return [], [], None
+    missing, changed = [], []
+    for rel, digest in man.get("required", {}).items():
+        p = os.path.join(here, rel)
+        if not os.path.exists(p):
+            missing.append(rel)
+        elif hashlib.sha256(open(p, "rb").read()).hexdigest() != digest:
+            changed.append(rel)
+    for rel in man.get("recommended", {}):
+        if not os.path.exists(os.path.join(here, rel)):
+            changed.append(rel + " (saknas / missing)")
+    return missing, changed, man.get("version")
+
+_inst_missing, _inst_changed, _inst_version = _installation_check()
+if _inst_missing:
+    st.set_page_config(page_title="Method Comparison Tool")
+    st.error(
+        "**Installationen är ofullständig / The installation is incomplete**\n\n"
+        f"Följande filer saknas eller ligger i fel mapp / These files are missing "
+        f"or in the wrong folder (version {_inst_version}):\n\n"
+        + "\n".join(f"- `{p}`" for p in _inst_missing)
+        + "\n\nLadda upp hela programmet med mappstrukturen bevarad. / "
+          "Upload the complete program with its folder structure intact.")
+    st.stop()
+
+try:
+    from analysis.regression import passing_bablok
+    from analysis.deming     import deming, weighted_deming
+    from analysis.statistics import summary_stats
+    from plots.regression_plot import make_regression_plot, make_bland_altman_plot
+    from analysis.export import results_to_csv, build_html_report, DPI_LABELS, dpi_from_label
+    from plots.mpl_export import (
+        render_pb_png, render_ba_png, mpl_fig_to_png_bytes, mpl_fig_to_svg_bytes,
+    )
+    from analysis.confusion import build_count_matrix, essential_agreement, categorical_agreement
+    from plots.confusion_plot import make_confusion_plot, render_confusion_png
+    from analysis.fourfold import (fourfold, fourfold_from_arrays,
+                                   check_prerequisites)
+    from plots.fourfold_plot import fourfold_html, build_fourfold_excel
+    from analysis.precision import compute_precision, precision_from_dataframe
+    from version import VERSION, VALIDATED_ON, version_string, stamp
+    from i18n import t, LANGUAGES, DEFAULT_LANG
+    from analysis.file_reader import (list_sheets, guess_column, suggest_analyte,
+                                      parse_numeric as _parse_numeric)
+    from analysis.data_loader import (
+        load_long_format, match_two_files, get_common_analytes,
+        find_duplicates, list_analytes, MultipleResultsError,
+        extract_precision_replicates,
+        build_matched_excel, build_precision_excel,
+    )
+except (ImportError, AttributeError, TypeError, SyntaxError) as _imp_err:
+    st.set_page_config(page_title="Method Comparison Tool")
+    st.error(
+        "**Programfilerna passar inte ihop / The program files do not match**\n\n"
+        + (("Filer som skiljer sig från version " + str(_inst_version) + " / "
+            "Files that differ from version " + str(_inst_version) + ":\n\n"
+            + "\n".join(f"- `{p}`" for p in _inst_changed) + "\n\n")
+           if _inst_changed else "")
+        + "Ladda upp hela programmet på nytt. / Upload the complete program again.\n\n"
+        + f"Tekniskt fel / Technical error: `{_imp_err}`")
+    st.stop()
 
 st.set_page_config(page_title="Method Comparison Tool", page_icon="📊", layout="wide")
 
@@ -288,6 +334,10 @@ with st.sidebar:
     st.session_state["_lang"] = LANGUAGES[_lang_name]
 
     st.title(t("📊 Method Comparison"))
+    if _inst_changed:
+        st.warning(t("These files differ from validated version {v}: {f}. Results "
+                     "are not covered by the validation until it is repeated.")
+                   .format(v=_inst_version, f=", ".join(_inst_changed)))
 
     # ══ STEP 1 ═════════════════════════════════════════════════════════════
     _step(1, "Choose your analysis")

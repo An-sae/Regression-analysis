@@ -1,0 +1,28 @@
+{
+ "version": "2.1.0",
+ "validated_on": "2026-09-22",
+ "required": {
+  "app.py": "7f7b5b79352f70fbed9fb66f1d3fba40ce948f67fcfb5e8f1e6f5362187be7dd",
+  "version.py": "83826c3c97f55fc4560cddc9d6e2d91dc4e416aee1683cce7594c06aaa6d77ab",
+  "i18n.py": "3a7f2a764f934689e3e4d4702b7f5cab144ee195e114fd27beeb3f9f1e6751de",
+  "requirements.txt": "3c96dd41f49104f2cc489716dcb99560ad5cd2d1b8ecb4e905e0f1037da5e016",
+  "analysis/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "analysis/regression.py": "d153a6165f16c9bea3b5933da61056d92c9e0772f0bb570b94ee3c04fd2d1f14",
+  "analysis/deming.py": "334209fc69196812d383b1fc2a538f8949abfda89011729c8864c66fe4b543b9",
+  "analysis/statistics.py": "a07d342f895efe6dd6a4bd059cdd66b4d345bb89bace99b208c280510eedb408",
+  "analysis/confusion.py": "f1475301671077af55973a3a5166c7782eb3c780aa54c15a18cbd8c7608d87cf",
+  "analysis/precision.py": "b265b67e283176cba644715cd2fb3ce6a097b653d5115617df0fb51e3591cd78",
+  "analysis/export.py": "fb28cb4e21687edb5199cac379223713e1c180065b9fa04b128e90482a605db0",
+  "analysis/data_loader.py": "85588d85d552bd526bb9e70d2efd220a185433283f1f0aedd570a85625360f38",
+  "analysis/file_reader.py": "a7e9caba987a40e3c25d9e51127833e845548a01e25c572384c8f4c27c8da3d7",
+  "analysis/fourfold.py": "513ff37b0d60a47a90424cab82559d7a844804bfeb0f1ff5d47ac191e3988e5c",
+  "plots/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "plots/regression_plot.py": "19876da799e47f5412fe4e9572f093d5b55916246fa75b5c37cde1f3f3f746b3",
+  "plots/confusion_plot.py": "0701f55e1efc0684ebd120ea4356b8244c27e5f39f58b008e1cac493e14e125f",
+  "plots/mpl_export.py": "1043db7ef0bb10d86cdc8cbc8a9bb17e0c38fa2774c507dc0ab972b7698c974d",
+  "plots/fourfold_plot.py": "e17c19be8e923cd12a94d8abae171b337736fb792adf131519175f784fabcc4b"
+ },
+ "recommended": {
+  ".streamlit/config.toml": "478599f7d05aa8713bd90b5800ca0f42dd0f525e198dc7e55f126e03fe94c341"
+ }
+}

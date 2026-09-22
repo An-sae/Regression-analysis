@@ -767,4 +767,6 @@ SV = {
     '✅ {d} days × {r} replicates ready.': '✅ {d} dagar × {r} replikat klara.',
     'Error': 'Fel',
     '🗑 Excluded points ({n})': '🗑 Uteslutna punkter ({n})',
+    'These files differ from validated version {v}: {f}. Results are not covered by the validation until it is repeated.':
+        'Dessa filer skiljer sig från validerad version {v}: {f}. Resultaten omfattas inte av valideringen förrän den upprepats.',
 }
