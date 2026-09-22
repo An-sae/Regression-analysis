@@ -18,8 +18,25 @@ LANGUAGES = {"Svenska": "sv", "English": "en"}
 DEFAULT_LANG = "sv"
 
 
+# Last language seen inside a script run. Used ONLY when t() is called
+# outside a script run (e.g. by Streamlit's test harness re-invoking a
+# format_func). Inside a run, each user's own session state always wins,
+# so concurrent users on a server never affect each other.
+_last_lang = DEFAULT_LANG
+
+
 def get_lang() -> str:
-    return st.session_state.get("_lang", DEFAULT_LANG)
+    global _last_lang
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        in_run = get_script_run_ctx(suppress_warning=True) is not None
+    except Exception:
+        in_run = True
+    if not in_run:
+        return _last_lang
+    lang = st.session_state.get("_lang", DEFAULT_LANG)
+    _last_lang = lang
+    return lang
 
 
 def t(text: str) -> str:
@@ -549,4 +566,205 @@ SV = {
         "server. Ingenting sparas när du stänger sidan.\n\n"
         "Undvik ändå uppgifter som går att härleda till en enskild "
         "patient om inte era lokala rutiner tillåter det.",
+    # --- Tillagt vid granskning av synliga texter ------------------------------
+    'Choose your analysis':
+        'Välj analys',
+    'Load your data':
+        'Ladda in data',
+    'Name your methods':
+        'Namnge metoderna',
+    'Plot options':
+        'Diagraminställningar',
+    'Breakpoints':
+        'Brytpunkter',
+    'Matrix options':
+        'Matrisinställningar',
+    'Fourfold table options':
+        'Fyrfältsinställningar',
+    'Precision options':
+        'Precisionsinställningar',
+    'Method Comparison':
+        'Metodjämförelse',
+    'Confusion Matrix':
+        'Konfusionsmatris',
+    'Precision Evaluation (EP15-A3)':
+        'Precisionsvärdering (EP15-A3)',
+    'Precision Evaluation':
+        'Precisionsvärdering',
+    'Regression / Confusion matrix':
+        'Regression / Konfusionsmatris',
+    'Reference':
+        'Referens',
+    'Candidate':
+        'Kandidat',
+    '📊 Download fourfold table (Excel)':
+        '📊 Ladda ner fyrfältstabell (Excel)',
+    '📥 Results (CSV)':
+        '📥 Resultat (CSV)',
+    'Preview — {r} replicates × {d} days (all rows shown):':
+        'Förhandsvisning — {r} replikat × {d} dagar (alla rader visas):',
+    'Preview — {n} rows for this sample:':
+        'Förhandsvisning — {n} rader för detta prov:',
+    'WITHIN-RUN (REPEATABILITY)':
+        'INOMSERIEPRECISION (REPETERBARHET)',
+    'Protocol: CLSI EP15-A3':
+        'Protokoll: CLSI EP15-A3',
+    'WITHIN-LABORATORY (TOTAL IMPRECISION)':
+        'TOTALIMPRECISION (INOM LABORATORIET)',
+    'eff. df':
+        'eff. frihetsgrader',
+    'Includes between-day variation':
+        'Inkluderar variation mellan dagar',
+    'TOTAL IMPRECISION — SIMPLE POOLED CALCULATION (all {nm} results as one set)':
+        'TOTALIMPRECISION — ENKEL SAMMANSLAGEN BERÄKNING (alla {nm} resultat som ett material)',
+    'ordinary SD of every measurement, day structure ignored':
+        'vanlig SD över alla mätningar, dagindelningen ignoreras',
+    'Within-run (repeatability)':
+        'Inomserieprecision (repeterbarhet)',
+    'Within-laboratory (total)':
+        'Totalimprecision (inom laboratoriet)',
+    'Simple pooled (all results)':
+        'Enkel sammanslagning (alla resultat)',
+    'Manufacturer claim — repeatability':
+        'Tillverkarens påstående — repeterbarhet',
+    'Manufacturer claim — within-laboratory':
+        'Tillverkarens påstående — totalimprecision',
+    'ᵃ Within-run SD (Sᵣ) = {sd}, CV% = {cv} (df = {df}; CLSI EP15-A3).':
+        'ᵃ Inomserie-SD (Sᵣ) = {sd}, CV% = {cv} (frihetsgrader = {df}; CLSI EP15-A3).',
+    'ᵇ Within-laboratory SD (Sₗ) = {sd}, CV% = {cv} (effective df = {df}; includes between-day variation).':
+        'ᵇ Total-SD inom laboratoriet (Sₗ) = {sd}, CV% = {cv} (effektiva frihetsgrader = {df}; inkluderar variation mellan dagar).',
+    '  Grand mean = {m}, D = {D} days, n = {n} replicates/day.':
+        '  Medelvärde = {m}, D = {D} dagar, n = {n} replikat/dag.',
+    'ᵈ Ordinary SD of all {n} results, day structure ignored (df = {df}). Shown for reference; it shrinks the between-day component by a factor {f} and is therefore biased low when a day effect exists.':
+        'ᵈ Vanlig SD över alla {n} resultat, dagindelningen ignoreras (frihetsgrader = {df}). Visas som referens; den krymper dagkomponenten med faktorn {f} och underskattar därför imprecisionen när en dageffekt finns.',
+    'ᶜ Chi-square verification (α = {a}, q = {q}); Pass if observed SD ≤ verification value.':
+        'ᶜ Chi-två-verifiering (α = {a}, q = {q}); godkänd om observerad SD ≤ verifieringsvärdet.',
+    "\nThe **CLSI within-laboratory SD** separates the data into a within-run and a\nbetween-day component and adds them on the variance scale\n(Sl² = Sr² + Sb²). The **simple pooled SD** ignores the day structure and\ntreats all {n} results as a single sample.\n\nThe two are related exactly, in expectation, by\n\nE[s²pooled] = Sr² + **{f}** × Sb²  where the factor is (D−1)n / (Dn−1)\n\nSo the simple calculation shrinks the between-day component by\n**{p} %** with your design of {D} days × {r} replicates. Consequences:\n\n- If there is **no** day-to-day effect (Sb² = 0) the two agree closely.\n- If a real day effect exists, the pooled value is **biased low** and\n  understates the imprecision a clinician would encounter between days.\n- The gap narrows as the number of days increases.\n\nReport the **CLSI value** for method validation and verification against a\nmanufacturer's claim. The pooled figure is provided for reference and for\ncomparison with sources that use the simplified approach.\n":
+        '\n**CLSI:s totalimprecision** delar upp data i en komponent inom serie och en\nmellan dagar, och adderar dem på variansskalan (Sl² = Sr² + Sb²). Den\n**enkla sammanslagna SD:n** ignorerar dagindelningen och behandlar alla\n{n} resultat som ett enda material.\n\nDe två hänger ihop exakt, i förväntan, enligt\n\nE[s²sammanslagen] = Sr² + **{f}** × Sb²  där faktorn är (D−1)n / (Dn−1)\n\nDen enkla beräkningen krymper alltså dagkomponenten med **{p} %** med ditt\nupplägg på {D} dagar × {r} replikat. Konsekvenser:\n\n- Finns **ingen** dageffekt (Sb² = 0) stämmer de två väl överens.\n- Finns en verklig dageffekt blir det sammanslagna värdet **för lågt** och\n  underskattar den imprecision som uppstår mellan dagar.\n- Skillnaden minskar ju fler dagar som ingår.\n\nRapportera **CLSI-värdet** vid metodvalidering och verifiering mot\ntillverkarens påstående. Det sammanslagna värdet visas som referens och\nför jämförelse med källor som använt den förenklade metoden.\n',
+    'No numeric rows found.':
+        'Inga numeriska rader hittades.',
+    'The table is empty.':
+        'Tabellen är tom.',
+    'The methods have different numbers of values.':
+        'Metoderna har olika antal värden.',
+    'cannot be calculated':
+        'kan ej beräknas',
+    'worse than chance':
+        'sämre än slumpen',
+    'slight':
+        'obetydlig',
+    'fair':
+        'svag',
+    'moderate':
+        'måttlig',
+    'substantial':
+        'god',
+    'almost perfect':
+        'mycket god',
+    'no discordant pairs':
+        'inga diskordanta par',
+    'exact binomial test':
+        'exakt binomialtest',
+    'chi-square with continuity correction':
+        'chi-två med kontinuitetskorrektion',
+    'Only {n} samples. CLSI EP12 recommends at least 50 samples, preferably 100–200 for verification.':
+        'Endast {n} prov. CLSI EP12 rekommenderar minst 50 prov, helst 100–200 vid verifiering.',
+    'Only {n} positive samples. The confidence interval for PPA/sensitivity will be very wide.':
+        'Endast {n} positiva prov. Konfidensintervallet för PPA/sensitivitet blir mycket brett.',
+    'Only {n} negative samples. The confidence interval for NPA/specificity will be very wide.':
+        'Endast {n} negativa prov. Konfidensintervallet för NPA/specificitet blir mycket brett.',
+    'The confidence interval for PPA spans {w} percentage points. More positive samples are needed for a reliable estimate.':
+        'Konfidensintervallet för PPA spänner {w} procentenheter. Fler positiva prov behövs för en säker skattning.',
+    'The confidence interval for NPA spans {w} percentage points. More negative samples are needed.':
+        'Konfidensintervallet för NPA spänner {w} procentenheter. Fler negativa prov behövs.',
+    'The proportion of positives in the material is {p} %. Predictive values apply only at this prevalence and must not be transferred to a clinical population with a different prevalence.':
+        'Andelen positiva i materialet är {p} %. Prediktiva värden gäller endast vid denna prevalens och ska inte överföras till en klinisk population med annan prevalens.',
+    'Sensitivity and specificity assume that the reference method is the gold standard for the true condition.':
+        'Sensitivitet och specificitet förutsätter att referensmetoden utgör facit för sant tillstånd.',
+    'Predictive values apply only at the prevalence in this material and cannot be transferred to a population with a different prevalence.':
+        'Prediktiva värden gäller endast vid prevalensen i detta material och kan inte överföras till en population med annan prevalens.',
+    'Neither method is assumed to be a gold standard. Percent agreement is therefore reported rather than sensitivity and specificity (CLSI EP12-A2, FDA 2007).':
+        'Ingen av metoderna antas utgöra facit. Därför redovisas procentuell överensstämmelse och inte sensitivitet och specificitet (CLSI EP12-A2, FDA 2007).',
+    'Confidence intervals calculated with the Wilson score method.':
+        'Konfidensintervall beräknade med Wilsons score-metod.',
+    "McNemar's test assesses whether the methods differ systematically; only discordant pairs contribute.":
+        'McNemars test prövar om metoderna skiljer sig systematiskt åt; endast diskordanta par bidrar.',
+    "Cohen's kappa describes agreement corrected for chance.":
+        'Cohens kappa beskriver överensstämmelse korrigerad för slumpen.',
+    '✅ Parsed {n} rows.': '✅ {n} rader inlästa.',
+    'Minor errors: {n} ({p} %)': 'Mindre fel: {n} ({p} %)',
+    'Count:': 'Antal:',
+    'Mean:': 'MV:',
+    'Within-run precision CV%:': 'Inomserieprecision CV%:',
+    'Total imprecision CV%:': 'Totalimprecision CV%:',
+    'Control': 'Kontroll',
+    'SD and CV% refer to all {n} measurements pooled. Within-run precision and total imprecision according to CLSI EP15-A3. Design: {D} days × {r} replicates.': 'SD och CV% avser samtliga {n} mätningar sammanslagna. Inomserieprecision och totalimprecision enligt CLSI EP15-A3. Upplägg: {D} dagar × {r} replikat.',
+    'Raw replicates': 'Rådata',
+    'Summary': 'Sammanfattning',
+    'Design: {D} days x {n} replicates ({N} measurements)': 'Upplägg: {D} dagar x {n} replikat ({N} mätningar)',
+    'SD and CV% refer to all measurements pooled.': 'SD och CV% avser samtliga mätningar sammanslagna.',
+    'Within-run precision and total imprecision according to CLSI EP15-A3.': 'Inomserieprecision och totalimprecision enligt CLSI EP15-A3.',
+    '95% CI': '95 % KI',
+    'Degrees of freedom': 'Frihetsgrader',
+    'Variance (SD²)': 'Varians (SD²)',
+    'Day': 'Dag',
+    'Rep': 'Rep',
+    'Within-run (Sᵣ)': 'Inomserie (Sᵣ)',
+    'Between-day (Sᵦ)': 'Mellan dagar (Sᵦ)',
+    'Within-laboratory / Total (Sₗ)': 'Totalimprecision (Sₗ)',
+    'Between-day': 'Mellan dagar',
+    'Reference (mm)': 'Referens (mm)',
+    'Candidate (mm)': 'Kandidat (mm)',
+    'Species': 'Art',
+    'Replicate': 'Replikat',
+    'Day mean': 'Dagmedelvärde',
+    'Claimed SD': 'Påstådd SD',
+    'Observed SD': 'Observerad SD',
+    'Verification value': 'Verifieringsvärde',
+    'Verdict': 'Utfall',
+    '✅  PASS': '✅  GODKÄND',
+    '❌  FAIL': '❌  UNDERKÄND',
+    # --- Filinläsning v2.1 ---
+    'Header row': 'Rubrikrad',
+    'Automatic': 'Automatisk',
+    'Automatic finds the header row even when the export starts with instrument or title rows.': 'Automatisk hittar rubrikraden även när exporten börjar med instrument- eller titelrader.',
+    'Sheet in file A': 'Blad i fil A',
+    'Sheet in file B': 'Blad i fil B',
+    'sheet {s}': 'blad {s}',
+    'header on row {h}': 'rubrik på rad {h}',
+    'no header': 'ingen rubrikrad',
+    'File {f}: {n} rows · {src} · {hdr}': 'Fil {f}: {n} rader · {src} · {hdr}',
+    'semicolon': 'semikolon',
+    'comma': 'komma',
+    'tab': 'tabb',
+    'UTF-8 with BOM': 'UTF-8 med BOM',
+    'Analysis in file A': 'Analys i fil A',
+    'Analysis in file B': 'Analys i fil B',
+    'No matching analysis name found in file B — choose it manually.': 'Ingen motsvarande analys hittades i fil B — välj den manuellt.',
+    'Suggested pairing: {a} ↔ {b} — please check.': 'Föreslagen koppling: {a} ↔ {b} — kontrollera.',
+    'The file without an analysis column contains only one analysis (repeated sample IDs are reruns)': 'Filen utan analyskolumn innehåller bara en analys (upprepade prov-ID är omkörningar)',
+    '⚙️ Matching options': '⚙️ Matchningsinställningar',
+    'Ignore leading zeros in numeric sample IDs': 'Bortse från ledande nollor i numeriska prov-ID',
+    'Excel removes leading zeros, so 0012345 in one file and 12345 in the other are treated as the same sample.': 'Excel tar bort ledande nollor, så 0012345 i den ena filen och 12345 i den andra behandlas som samma prov.',
+    '⚠️ Repeated results (reruns): file A {a} rows, file B {b} rows.': '⚠️ Upprepade resultat (omkörningar): fil A {a} rader, fil B {b} rader.',
+    'Keep first valid': 'Behåll första giltiga',
+    'Keep last valid': 'Behåll sista giltiga',
+    '✅ {m} samples matched · {u} pairs used': '✅ {m} prov matchade · {u} par används',
+    'Only in A: {a}  |  Only in B: {b}': 'Endast i A: {a}  |  Endast i B: {b}',
+    '{n} matched samples not used:': '{n} matchade prov används inte:',
+    'below measuring range': 'under mätområdet',
+    'above measuring range': 'över mätområdet',
+    'text result': 'textresultat',
+    'no result': 'inget resultat',
+    'File {f}: {n} sample IDs are in scientific notation (e.g. 2,40915E+09) and cannot be matched. Export the IDs as text.': 'Fil {f}: {n} prov-ID är i vetenskaplig notation (t.ex. 2,40915E+09) och kan inte matchas. Exportera prov-ID som text.',
+    "File {f}: {n} results such as 1,234 could be either a decimal or a thousands separator; read with decimal '{d}'. Check the values.": "Fil {f}: {n} resultat som 1,234 kan vara både decimal- och tusentalsavgränsare; lästa med decimaltecken '{d}'. Kontrollera värdena.",
+    'File {f}: the result column mixes decimal comma and decimal point; each value was read by its own format. Check the values.': 'Fil {f}: resultatkolumnen blandar decimalkomma och decimalpunkt; varje värde lästes efter sitt eget format. Kontrollera värdena.',
+    '🔎 How the values were read': '🔎 Så tolkades värdena',
+    'Several results per sample ID but no analysis column is selected, so results cannot be paired safely. Choose the analysis column, or confirm that the file contains only one analysis.': 'Flera resultat per prov-ID men ingen analyskolumn är vald, så resultaten kan inte paras säkert. Välj analyskolumnen, eller bekräfta att filen bara innehåller en analys.',
+    'Matching error': 'Fel vid matchning',
+    '⚠️ {n} result(s) not used: the calculation requires the same number of replicates every day, so each day was limited to its first {m} results. They are marked in the raw data.': '⚠️ {n} resultat används inte: beräkningen kräver lika många replikat varje dag, så varje dag begränsades till sina {m} första resultat. De är markerade i rådata.',
+    '⚠️ {n} trailing result(s) excluded (incomplete day).': '⚠️ {n} resultat i slutet uteslutna (ofullständig dag).',
+    '✅ {d} days × {r} replicates ready.': '✅ {d} dagar × {r} replikat klara.',
+    'Error': 'Fel',
+    '🗑 Excluded points ({n})': '🗑 Uteslutna punkter ({n})',
 }

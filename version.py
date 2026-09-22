@@ -21,17 +21,42 @@ change in CHANGELOG below. Re-run tests/ and update VALIDATED_ON.
   PATCH  bug fix or cosmetic change
 """
 
-VERSION = "1.0.0"
+VERSION = "2.1.0"
 
 # Date the full validation suite was last executed against the reference
 # datasets (see Valideringsrapport.docx).
-VALIDATED_ON = "2026-09-10"
+VALIDATED_ON = "2026-09-22"
 
 # Short description shown next to the version in the application.
 STATUS = "Validerad"
 
 
 CHANGELOG = [
+    ("2.1.0", "2026-09-22",
+     "Ny filinläsning (analysis/file_reader.py): alla celler läses som text; "
+     "kodning (UTF-8, BOM, Windows-1252), avgränsare, rubrikrad och Excel-blad "
+     "identifieras automatiskt. Tal tolkas per kolumn så att decimaltecknet "
+     "avgörs av hela kolumnen: '1,786' i en fil med decimalpunkt läses nu som "
+     "1786 (tidigare 1,786). Kvalificerare (<, >), flaggor och enheter skiljs "
+     "av; '<' och '>' utesluts och redovisas. Prov-ID normaliseras (mellanslag, "
+     "versaler, 123.0, valfritt ledande nollor); ID i vetenskaplig notation "
+     "flaggas. Analyser kopplas mellan filer (CRP4 <-> CRP <-> P-CRP) med "
+     "förslag som användaren bekräftar. Analyskolumn N/A på en fil med flera "
+     "resultat per prov stoppas (tidigare parades olika analyser ihop). "
+     "Omkörningar: 'behåll första giltiga' som standard. Antal matchade, "
+     "använda och uteslutna par redovisas med orsak. Samma säkra taltolkning "
+     "i enfils- och klistra-in-läget. Precision: trunkering till balanserad "
+     "design redovisas och markeras. Knappen 'Återställ alla punkter' "
+     "kraschade och är rättad. Verifierad med tests/filinlasning (28 fällor, "
+     "helhetstest, gränssnittstest, precision, rundtur, skala, uteslutning)."),
+    ("2.0.0", "2026-09-21",
+     "Viktad Deming ersatt med Linnet (1993) iterativt omviktad algoritm "
+     "(vikter från skattade sanna värden, jackknife där hela anpassningen "
+     "upprepas). Tidigare version använde vikter 1/(x²+y²/λ) utan iteration "
+     "och ett oviktat intercept i jackknife. Resultat för viktad Deming "
+     "ändras; tidigare viktade Deming-analyser bör köras om. Verifierad mot "
+     "NCSS kap. 303 ex. 6 / R mcr: samtliga sex publicerade värden "
+     "återges med 7 decimaler."),
     ("1.0.0", "2026-09-10",
      "Första validerade versionen. Verifierad mot Bland & Altman 1986, "
      "Chesher 2008 (CLSI EP15-A3), sluten Deming-lösning och oberoende "

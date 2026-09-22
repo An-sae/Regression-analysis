@@ -27,9 +27,11 @@ from plots.fourfold_plot import fourfold_html, build_fourfold_excel
 from analysis.precision import compute_precision, precision_from_dataframe
 from version import VERSION, VALIDATED_ON, version_string, stamp
 from i18n import t, LANGUAGES, DEFAULT_LANG
+from analysis.file_reader import (list_sheets, guess_column, suggest_analyte,
+                                  parse_numeric as _parse_numeric)
 from analysis.data_loader import (
     load_long_format, match_two_files, get_common_analytes,
-    find_duplicates, resolve_duplicates,
+    find_duplicates, list_analytes, MultipleResultsError,
     extract_precision_replicates,
     build_matched_excel, build_precision_excel,
 )
@@ -70,21 +72,81 @@ def _check_password() -> bool:
 _check_password()
 
 # ── pure helpers ───────────────────────────────────────────────────────────────
+def _num_col(series) -> np.ndarray:
+    """Tal per kolumn: decimaltecken avgörs av hela kolumnen, flaggor och
+    enheter skiljs av, '<' och '>' samt text blir NaN (analysis.file_reader)."""
+    vals, _ = _parse_numeric(pd.Series(series).astype(object).where(
+        pd.Series(series).notna(), "").astype(str).reset_index(drop=True))
+    return vals["value"].values.astype(float)
+
+
 def parse_pasted(text):
-    rows = []
+    """Klistrade data: två kolumner (tabb, semikolon eller mellanslag).
+    Varje kolumn tolkas som helhet, så '1,234' läses rätt i en kolumn med
+    decimalpunkt och '12,3 H' behåller sitt värde."""
+    xs, ys = [], []
     for line in text.strip().splitlines():
         line = line.strip()
-        if not line: continue
-        parts = line.split("\t") if "\t" in line else (
-                line.split(";")  if ";" in line else line.split())
-        if len(parts) < 2: continue
-        try:
-            rows.append((float(parts[0].replace(",",".")),
-                         float(parts[1].replace(",","."))))
-        except ValueError:
+        if not line:
             continue
-    if not rows: raise ValueError("No numeric rows found.")
-    return pd.DataFrame(rows, columns=["reference","candidate"])
+        parts = line.split("\t") if "\t" in line else (
+                line.split(";") if ";" in line else line.split(None, 1))
+        if len(parts) < 2:
+            continue
+        xs.append(parts[0].strip()); ys.append(parts[1].strip())
+    if not xs:
+        raise ValueError("No numeric rows found.")
+    x = _num_col(xs); y = _num_col(ys)
+    ok = np.isfinite(x) & np.isfinite(y)
+    if not ok.any():
+        raise ValueError("No numeric rows found.")
+    return pd.DataFrame({"reference": x[ok], "candidate": y[ok]})
+
+def _step(n: int, label: str) -> None:
+    """Numbered step heading in the sidebar: a filled circle with the digit
+    drawn by CSS (not a Unicode ① glyph, which renders thin and off-baseline
+    in the fallback font) followed by the translated label."""
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:10px;'
+        f'margin:6px 0 10px 0;">'
+        f'<span style="display:inline-flex;align-items:center;'
+        f'justify-content:center;min-width:24px;height:24px;border-radius:50%;'
+        f'background:#1E40AF;color:#FFFFFF;font-weight:700;font-size:13px;'
+        f'line-height:1;">{n}</span>'
+        f'<span style="font-weight:600;font-size:1rem;color:inherit;">'
+        f'{t(label)}</span></div>',
+        unsafe_allow_html=True)
+
+
+def _tdf(df):
+    """Translate OUR generated tables for display: column headers, index,
+    and text cells that are translation keys. "Day 3" / "Rep 2" style labels
+    are translated word-wise. Not used on previews of the user's own file."""
+    import re as _re
+
+    def tr(x):
+        if not isinstance(x, str):
+            return x
+        m = _re.fullmatch(r"(Day|Rep) (\d+)", x)
+        if m:
+            return f"{t(m.group(1))} {m.group(2)}"
+        return t(x)
+
+    out = df.copy()
+    out.columns = [tr(c) for c in out.columns]
+    if out.index.name:
+        out.index.name = tr(out.index.name)
+    # pandas >= 3 stores text as a dedicated string dtype, not object,
+    # so test for "object OR string" rather than object alone.
+    _is_txt = lambda x: (pd.api.types.is_object_dtype(x)
+                         or pd.api.types.is_string_dtype(x))
+    if _is_txt(out.index):
+        out.index = [tr(i) for i in out.index]
+    for c in out.columns:
+        if _is_txt(out[c]):
+            out[c] = out[c].map(tr)
+    return out
+
 
 def fmt(v, d): return f"{v:.{d}f}".replace(".","," )
 
@@ -188,7 +250,7 @@ def _apply_filter(df, exclude_cols, key_prefix):
 
     df=pd.read_excel(BytesIO(raw), sheet_name=sheet, header=0 if hdr else None)
     df.columns=[str(c) for c in df.columns]
-    def _col(c): return pd.to_numeric(df[c].astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+    def _col(c): return _num_col(df[c])
     return _col(xc), _col(yc)
 
 def _read_csv(raw, hdr, xc, yc):
@@ -197,7 +259,7 @@ def _read_csv(raw, hdr, xc, yc):
     if df.select_dtypes(include=[np.number]).shape[1]<2:
         df=pd.read_csv(BytesIO(raw), **kw)
     df.columns=[str(c) for c in df.columns]
-    def _col(c): return pd.to_numeric(df[c].astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+    def _col(c): return _num_col(df[c])
     return _col(xc), _col(yc)
 
 
@@ -228,13 +290,13 @@ with st.sidebar:
     st.title(t("📊 Method Comparison"))
 
     # ══ STEP 1 ═════════════════════════════════════════════════════════════
-    st.markdown(t("##### ① &nbsp;Choose your analysis"))
+    _step(1, "Choose your analysis")
     analysis_type = st.selectbox(
         t("Analysis type"), label_visibility="collapsed",
         options=["Passing–Bablok","Deming","Confusion Matrix",
                  "Precision Evaluation (EP15-A3)",
                  "Fourfold table (qualitative)"],
-        key="analysis_type")
+        key="analysis_type", format_func=t)
 
     _WHAT = {
         "Passing–Bablok": "Non-parametric regression · robust to outliers",
@@ -243,7 +305,7 @@ with st.sidebar:
         "Precision Evaluation (EP15-A3)": "Within-run & within-lab imprecision",
         "Fourfold table (qualitative)": "2×2 table for positive/negative methods",
     }
-    st.caption(_WHAT[analysis_type])
+    st.caption(t(_WHAT[analysis_type]))
 
     if analysis_type == "Deming":
         with st.expander(t("⚙️ Deming options"), expanded=True):
@@ -259,7 +321,7 @@ with st.sidebar:
         error_ratio     = 1.0
     st.divider()
 
-    st.markdown(t("##### ② &nbsp;Load your data"))
+    _step(2, "Load your data")
     if analysis_type == "Precision Evaluation (EP15-A3)":
         st.caption(t("Upload or paste precision data in the main area →"))
         _x_sid=_y_sid=_sid_err=None; uploaded_file=pasted_text=None
@@ -269,7 +331,7 @@ with st.sidebar:
             _lf_mode=st.radio(t("Data format"),
                 ["Single file (two columns)","Two long-format files (match by ID)"],
                 key="lf_mode",
-                help="Long-format: one file per method with SampleID | Analysis | Result columns.")
+                help="Long-format: one file per method with SampleID | Analysis | Result columns.", format_func=t)
         # (else already defaulted above)
 
         if _lf_mode=="Two long-format files (match by ID)":
@@ -290,82 +352,167 @@ with st.sidebar:
                        st.session_state.get("lf_fname_b") != _uf_b.name:
                         st.session_state["lf_rb_b"]    = _uf_b.read()
                         st.session_state["lf_fname_b"] = _uf_b.name
-
                     _rb_a = st.session_state["lf_rb_a"]
                     _rb_b = st.session_state["lf_rb_b"]
+
                     _lf_hdr_choice = st.radio(
-                        t("Header row? (applies to both files)"),
-                        ["Yes (first row)", "No header"],
-                        horizontal=True, key="lf_hdr",
-                        help="Choose 'No header' if the very first row is already data — "
-                             "otherwise that row would be lost.")
-                    _lf_has_hdr = _lf_hdr_choice == "Yes (first row)"
-                    _lf_df_a=load_long_format(_rb_a, _uf_a.name, has_header=_lf_has_hdr)
-                    _lf_df_b=load_long_format(_rb_b, _uf_b.name, has_header=_lf_has_hdr)
-                    if not _lf_has_hdr:
-                        st.caption(t("Columns named Column 1, Column 2 … — first row kept as data."))
+                        t("Header row"), ["Automatic", "No header"],
+                        horizontal=True, key="lf_hdr", format_func=t,
+                        help=t("Automatic finds the header row even when the export "
+                               "starts with instrument or title rows."))
+                    _auto = _lf_hdr_choice == "Automatic"
+
+                    _sh_a = _sh_b = None
+                    _sheets_a = list_sheets(_rb_a, _uf_a.name)
+                    _sheets_b = list_sheets(_rb_b, _uf_b.name)
+                    if len(_sheets_a) > 1:
+                        _sh_a = st.selectbox(t("Sheet in file A"), _sheets_a, key="lf_sha")
+                    if len(_sheets_b) > 1:
+                        _sh_b = st.selectbox(t("Sheet in file B"), _sheets_b, key="lf_shb")
+
+                    _lf_df_a = load_long_format(_rb_a, _uf_a.name, has_header=_auto, sheet=_sh_a)
+                    _lf_df_b = load_long_format(_rb_b, _uf_b.name, has_header=_auto, sheet=_sh_b)
+                    for _fl, _df in (("A", _lf_df_a), ("B", _lf_df_b)):
+                        _ri = _df.attrs.get("read_info", {})
+                        _src = (t("sheet {s}").format(s=_ri.get("sheet"))
+                                if _ri.get("kind") == "Excel"
+                                else f"{t(_ri.get('encoding', ''))} · {t(_ri.get('delimiter', ''))}")
+                        _hdr = (t("header on row {h}").format(h=_ri.get("header_row"))
+                                if _ri.get("header_row") else t("no header"))
+                        st.caption(t("File {f}: {n} rows · {src} · {hdr}").format(
+                            f=_fl, n=_ri.get("n_rows", len(_df)), src=_src, hdr=_hdr))
+
+                    def _ix(opts, guess, fallback=0):
+                        return opts.index(guess) if guess in opts else min(fallback, len(opts) - 1)
+
+                    _cols_a, _cols_b = list(_lf_df_a.columns), list(_lf_df_b.columns)
                     st.markdown(t("**Column mapping — File A**"))
-                    _ca2=st.columns(3)
-                    _id_a =_ca2[0].selectbox("Sample ID",list(_lf_df_a.columns),key="lf_ida")
-                    _an_a =_ca2[1].selectbox("Analysis",["N/A"]+list(_lf_df_a.columns),key="lf_ana")
-                    _rs_a =_ca2[2].selectbox("Result",list(_lf_df_a.columns),
-                                              index=min(2,len(_lf_df_a.columns)-1),key="lf_rsa")
-                    _lf_label_a=st.text_input(t("Label A"),"Reference",key="lf_la")
+                    _ca2 = st.columns(3)
+                    _id_a = _ca2[0].selectbox(t("Sample ID"), _cols_a,
+                                              index=_ix(_cols_a, guess_column(_cols_a, "id")), key="lf_ida")
+                    _ana_opts = ["N/A"] + _cols_a
+                    _an_a = _ca2[1].selectbox(t("Analysis"), _ana_opts,
+                                              index=_ix(_ana_opts, guess_column(_cols_a, "an")), key="lf_ana")
+                    _rs_a = _ca2[2].selectbox(t("Result"), _cols_a,
+                                              index=_ix(_cols_a, guess_column(_cols_a, "res"), 2), key="lf_rsa")
+                    _lf_label_a = st.text_input(t("Label A"), t("Reference"), key="lf_la")
                     st.markdown(t("**Column mapping — File B**"))
-                    _cb2=st.columns(3)
-                    _id_b =_cb2[0].selectbox("Sample ID",list(_lf_df_b.columns),key="lf_idb")
-                    _an_b =_cb2[1].selectbox("Analysis",["N/A"]+list(_lf_df_b.columns),key="lf_anb")
-                    _rs_b =_cb2[2].selectbox("Result",list(_lf_df_b.columns),
-                                              index=min(2,len(_lf_df_b.columns)-1),key="lf_rsb")
-                    _lf_label_b=st.text_input(t("Label B"),"Candidate",key="lf_lb")
+                    _cb2 = st.columns(3)
+                    _id_b = _cb2[0].selectbox(t("Sample ID"), _cols_b,
+                                              index=_ix(_cols_b, guess_column(_cols_b, "id")), key="lf_idb")
+                    _anb_opts = ["N/A"] + _cols_b
+                    _an_b = _cb2[1].selectbox(t("Analysis"), _anb_opts,
+                                              index=_ix(_anb_opts, guess_column(_cols_b, "an")), key="lf_anb")
+                    _rs_b = _cb2[2].selectbox(t("Result"), _cols_b,
+                                              index=_ix(_cols_b, guess_column(_cols_b, "res"), 2), key="lf_rsb")
+                    _lf_label_b = st.text_input(t("Label B"), t("Candidate"), key="lf_lb")
 
-                    # Analysis column handling
-                    _no_analysis=(_an_a=="N/A" or _an_b=="N/A")
-                    if _no_analysis:
-                        _lf_df_a=_lf_df_a.copy(); _lf_df_a["__analyte__"]="ALL"
-                        _lf_df_b=_lf_df_b.copy(); _lf_df_b["__analyte__"]="ALL"
-                        _an_a="__analyte__"; _an_b="__analyte__"
-                        _lf_analyte="ALL"
-                        st.caption(t("All rows treated as one analyte."))
-                    else:
-                        _common=get_common_analytes(_lf_df_a,_lf_df_b,_an_a,_an_b)
-                        if _common:
-                            _lf_analyte=st.selectbox(t("Analyte to compare"),_common,key="lf_analyte")
-                        else:
-                            st.warning(t("No common analytes found in both files."))
-                            _lf_analyte="ALL"
+                    # ── Which analysis in each file? ────────────────────────
+                    _an_col_a = None if _an_a == "N/A" else _an_a
+                    _an_col_b = None if _an_b == "N/A" else _an_b
+                    _lf_an_a = _lf_an_b = None
+                    if _an_col_a:
+                        _lf_an_a = st.selectbox(t("Analysis in file A"),
+                                                list_analytes(_lf_df_a, _an_col_a), key="lf_analyte_a")
+                    if _an_col_b:
+                        _list_b = list_analytes(_lf_df_b, _an_col_b)
+                        _sug, _why = (suggest_analyte(_lf_an_a, _list_b) if _lf_an_a
+                                      else (None, ""))
+                        _lf_an_b = st.selectbox(
+                            t("Analysis in file B"), _list_b,
+                            index=_list_b.index(_sug) if _sug in _list_b else 0,
+                            key=f"lf_analyte_b_{_lf_an_a}")
+                        if _lf_an_a and _sug is None:
+                            st.warning(t("No matching analysis name found in file B — "
+                                         "choose it manually."))
+                        elif _sug and _why != "exact" and _lf_an_b == _sug:
+                            st.caption(t("Suggested pairing: {a} ↔ {b} — please check.")
+                                       .format(a=_lf_an_a, b=_lf_an_b))
+                    _lf_single = False
+                    if _an_col_a is None or _an_col_b is None:
+                        _lf_single = st.checkbox(
+                            t("The file without an analysis column contains only one "
+                              "analysis (repeated sample IDs are reruns)"), key="lf_single")
 
-                    # Duplicate detection
-                    _dups_a=find_duplicates(_lf_df_a,_id_a,_an_a,_rs_a)
-                    _dups_b=find_duplicates(_lf_df_b,_id_b,_an_b,_rs_b)
-                    if not _dups_a.empty or not _dups_b.empty:
-                        st.warning(f"⚠️ Duplicates: File A {len(_dups_a)} rows, "
-                                   f"File B {len(_dups_b)} rows.")
-                        _dup_s=st.radio(t("Resolve duplicates"),
-                                        ["Keep first","Keep last","Use mean"],key="lf_dup")
-                        _sm={"Keep first":"first","Keep last":"last","Use mean":"mean"}[_dup_s]
-                        _lf_df_a=resolve_duplicates(_lf_df_a,_id_a,_an_a,_rs_a,_sm)
-                        _lf_df_b=resolve_duplicates(_lf_df_b,_id_b,_an_b,_rs_b,_sm)
+                    with st.expander(t("⚙️ Matching options")):
+                        _lf_zeros = st.toggle(
+                            t("Ignore leading zeros in numeric sample IDs"), value=True,
+                            key="lf_zeros",
+                            help=t("Excel removes leading zeros, so 0012345 in one file "
+                                   "and 12345 in the other are treated as the same sample."))
 
-                    # Run matching
-                    _lf_x_arr,_lf_y_arr,_lf_report_df=match_two_files(
-                        _lf_df_a,_lf_df_b,_id_a,_id_b,_an_a,_an_b,_rs_a,_rs_b,
-                        _lf_analyte,_lf_label_a,_lf_label_b)
-                    _nm=int((_lf_report_df["Match"]=="Matched").sum())
-                    _na=int((_lf_report_df["Match"]=="Only in A").sum())
-                    _nb=int((_lf_report_df["Match"]=="Only in B").sum())
-                    if _nm==0:
+                    # ── Reruns / duplicates ────────────────────────────────
+                    _sm = "first_valid"
+                    _dups_a = find_duplicates(_lf_df_a, _id_a, _an_col_a, _rs_a, _lf_zeros)
+                    _dups_b = find_duplicates(_lf_df_b, _id_b, _an_col_b, _rs_b, _lf_zeros)
+                    if (not _dups_a.empty or not _dups_b.empty) and \
+                       (_an_col_a and _an_col_b or _lf_single):
+                        st.warning(t("⚠️ Repeated results (reruns): file A {a} rows, "
+                                     "file B {b} rows.").format(a=len(_dups_a), b=len(_dups_b)))
+                        _DUP_LBL = {"first_valid": "Keep first valid", "last_valid": "Keep last valid",
+                                    "mean": "Use mean", "first": "Keep first", "last": "Keep last"}
+                        _sm = st.radio(t("Resolve duplicates"), list(_DUP_LBL),
+                                       key="lf_dup", format_func=lambda v: t(_DUP_LBL[v]))
+
+                    # ── Match ──────────────────────────────────────────────
+                    _lf_x_arr, _lf_y_arr, _lf_report_df, _lf_sum = match_two_files(
+                        _lf_df_a, _lf_df_b, _id_a, _id_b, _an_col_a, _an_col_b, _rs_a, _rs_b,
+                        _lf_an_a or "ALL", _lf_an_b or "ALL", _lf_label_a, _lf_label_b,
+                        ignore_leading_zeros=_lf_zeros, dup_strategy=_sm,
+                        single_analyte=_lf_single)
+                    _lf_analyte = ("ALL" if not (_lf_an_a or _lf_an_b) else
+                                   (_lf_an_a or _lf_an_b) if _lf_an_a == _lf_an_b or not
+                                   (_lf_an_a and _lf_an_b) else f"{_lf_an_a} ↔ {_lf_an_b}")
+
+                    _s = _lf_sum
+                    if _s["matched_ids"] == 0:
                         st.warning(t("⚠️ No matched pairs — check column mapping."))
                     else:
-                        st.success(f"✅ {_nm} matched pairs ready.")
-                        st.caption(f"Only in A: {_na}  |  Only in B: {_nb}")
-                    _lf_matched_xlsx=build_matched_excel(
-                        _lf_report_df,_lf_label_a,_lf_label_b,_lf_analyte)
+                        st.success(t("✅ {m} samples matched · {u} pairs used").format(
+                            m=_s["matched_ids"], u=_s["used"]))
+                        st.caption(t("Only in A: {a}  |  Only in B: {b}").format(
+                            a=_s["only_a"], b=_s["only_b"]))
+                    if _s["excluded"]:
+                        _parts = []
+                        for _k, _v in _s["excluded_reasons"].items():
+                            _side, _rsn = _k.split(": ", 1)
+                            _parts.append(f"{_side}: {t(_rsn)} × {_v}")
+                        st.info(t("{n} matched samples not used:").format(n=_s["excluded"])
+                                + " " + "; ".join(_parts))
+                    for _fl in ("a", "b"):
+                        if _s[f"sci_ids_{_fl}"]:
+                            st.error(t("File {f}: {n} sample IDs are in scientific notation "
+                                       "(e.g. 2,40915E+09) and cannot be matched. Export the "
+                                       "IDs as text.").format(f=_fl.upper(), n=_s[f"sci_ids_{_fl}"]))
+                        _p = _s[f"parse_{_fl}"]
+                        if _p.get("ambiguous"):
+                            st.warning(t("File {f}: {n} results such as 1,234 could be either "
+                                         "a decimal or a thousands separator; read with "
+                                         "decimal '{d}'. Check the values.").format(
+                                f=_fl.upper(), n=_p["ambiguous"], d=_p["decimal"]))
+                        if _p.get("conflict"):
+                            st.warning(t("File {f}: the result column mixes decimal comma and "
+                                         "decimal point; each value was read by its own "
+                                         "format. Check the values.").format(f=_fl.upper()))
+                    with st.expander(t("🔎 How the values were read")):
+                        _pv_cols = ["SampleID", "Original A", _lf_label_a,
+                                    "Original B", _lf_label_b, "Note"]
+                        _pv = _lf_report_df[_lf_report_df["Match"] == "Matched"][_pv_cols]
+                        _pv = _pv.sort_values("Note", ascending=False, kind="stable")
+                        st.dataframe(_pv.head(200), hide_index=True, use_container_width=True)
+                    _lf_matched_xlsx = build_matched_excel(
+                        _lf_report_df, _lf_label_a, _lf_label_b, _lf_analyte)
+                except MultipleResultsError:
+                    st.error(t("Several results per sample ID but no analysis column is "
+                               "selected, so results cannot be paired safely. Choose the "
+                               "analysis column, or confirm that the file contains only "
+                               "one analysis."))
+                    _sid_err = "multiple"
                 except Exception as _e:
-                    st.error(f"Matching error: {_e}")
+                    st.error(f"{t('Matching error')}: {_e}")
                     _sid_err=str(_e)
         else:
-            input_mode=st.radio(t("Input method"),["📂 Upload file","📋 Paste data"],key="imode")
+            input_mode=st.radio(t("Input method"),["📂 Upload file","📋 Paste data"],key="imode", format_func=t)
             _x_sid=_y_sid=_sid_err=None; uploaded_file=pasted_text=None
             if input_mode=="📂 Upload file":
                 uploaded_file=st.file_uploader(t("Upload CSV or Excel"),type=["csv","xlsx","xls"],key="fup")
@@ -378,7 +525,7 @@ with st.sidebar:
                             _wb=openpyxl.load_workbook(BytesIO(_rb),read_only=True,data_only=True)
                             _sn=_wb.sheetnames; _wb.close()
                             _ss=st.selectbox(t("Sheet / tab"),_sn,key="ss")
-                            _hc=st.radio(t("Header row?"),["Yes (first row)","No header"],horizontal=True,key="hx")
+                            _hc=st.radio(t("Header row?"),["Yes (first row)","No header"],horizontal=True,key="hx", format_func=t)
                             _hdr=_hc=="Yes (first row)"
                             _pv=pd.read_excel(BytesIO(_rb),sheet_name=_ss,header=0 if _hdr else None,nrows=5)
                             if not _hdr: _pv.columns=[f"Column {i+1}" for i in range(len(_pv.columns))]
@@ -393,12 +540,12 @@ with st.sidebar:
                                 if not _hdr: _full.columns=[f"Column {i+1}" for i in range(len(_full.columns))]
                                 else: _full.columns=[str(c) for c in _full.columns]
                                 _full=_apply_filter(_full,exclude_cols=[_xc,_yc],key_prefix="xe")
-                                def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+                                def _tonum(s): return _num_col(s)
                                 _x_sid=_tonum(_full[_xc]); _y_sid=_tonum(_full[_yc])
                             else: _sid_err="Sheet needs at least 2 columns."
                         else:
                             _rb=uploaded_file.read(); uploaded_file.seek(0)
-                            _hc=st.radio(t("Header row?"),["Yes (first row)","No header"],horizontal=True,key="hc")
+                            _hc=st.radio(t("Header row?"),["Yes (first row)","No header"],horizontal=True,key="hc", format_func=t)
                             _hdr=_hc=="Yes (first row)"
                             _pv=pd.read_csv(BytesIO(_rb),header=0 if _hdr else None,sep=None,engine="python",decimal=",")
                             if _pv.select_dtypes(include=[np.number]).shape[1]<2:
@@ -416,7 +563,7 @@ with st.sidebar:
                             if not _hdr: _full.columns=[f"Column {i+1}" for i in range(len(_full.columns))]
                             else: _full.columns=[str(c) for c in _full.columns]
                             _full=_apply_filter(_full,exclude_cols=[_xc,_yc],key_prefix="ce")
-                            def _tonum(s): return pd.to_numeric(s.astype(str).str.replace(",","."),errors="coerce").values.astype(float)
+                            def _tonum(s): return _num_col(s)
                             _x_sid=_tonum(_full[_xc]); _y_sid=_tonum(_full[_yc])
                     except Exception as _e:
                         _sid_err=str(_e)
@@ -425,9 +572,9 @@ with st.sidebar:
                 pasted_text=st.text_area(t("Paste data here"),height=160,
                     placeholder="10,2\t10,5\n15,7\t16,1\n...",key="pa")
 
-    st.markdown(t("##### ③ &nbsp;Name your methods"))
-    x_label=st.text_input(t("Reference method (x-axis)"),"Reference Method",key="xl")
-    y_label=st.text_input(t("Candidate method (y-axis)"),"Candidate Method",key="yl")
+    _step(3, "Name your methods")
+    x_label=st.text_input(t("Reference method (x-axis)"),t("Reference Method"),key="xl")
+    y_label=st.text_input(t("Candidate method (y-axis)"),t("Candidate Method"),key="yl")
     st.divider()
 
     # ── Safe defaults for ALL branch-specific variables ───────────────────────
@@ -464,7 +611,7 @@ with st.sidebar:
             "Deming":"Weighted Deming Method Comparison" if deming_weighted
                      else "Deming Method Comparison"
         }[analysis_type]
-        st.markdown(t("##### ④ &nbsp;Plot options"))
+        _step(4, "Plot options")
 
         # -- Essentials: visible without opening anything ---------------------
         decimals = st.slider(t("Decimal places"), 1, 8, 2, key="dec")
@@ -486,42 +633,42 @@ with st.sidebar:
             st.caption(t("Leave any field blank for automatic scaling."))
             st.markdown(t("**Regression plot**"))
             _a=st.columns(2)
-            pb_x_min=_pa(_a[0].text_input("X min","0",key="pxn"))
-            pb_x_max=_pa(_a[1].text_input("X max","",key="pxx"))
-            pb_y_min=_pa(_a[0].text_input("Y min","0",key="pyn"))
-            pb_y_max=_pa(_a[1].text_input("Y max","",key="pyx"))
+            pb_x_min=_pa(_a[0].text_input(t("X min"),"0",key="pxn"))
+            pb_x_max=_pa(_a[1].text_input(t("X max"),"",key="pxx"))
+            pb_y_min=_pa(_a[0].text_input(t("Y min"),"0",key="pyn"))
+            pb_y_max=_pa(_a[1].text_input(t("Y max"),"",key="pyx"))
             st.markdown(t("**Bland–Altman plot**"))
             _b=st.columns(2)
-            ba_x_min=_pa(_b[0].text_input("X min","",key="bxn"))
-            ba_x_max=_pa(_b[1].text_input("X max","",key="bxx"))
-            ba_y_min=_pa(_b[0].text_input("Y min","",key="byn"))
-            ba_y_max=_pa(_b[1].text_input("Y max","",key="byx"))
+            ba_x_min=_pa(_b[0].text_input(t("X min"),"",key="bxn"))
+            ba_x_max=_pa(_b[1].text_input(t("X max"),"",key="bxx"))
+            ba_y_min=_pa(_b[0].text_input(t("Y min"),"",key="byn"))
+            ba_y_max=_pa(_b[1].text_input(t("Y max"),"",key="byx"))
 
         # -- Colours -----------------------------------------------------------
         with st.expander(t("🎨 Colours")):
             st.markdown(t("**Regression plot**"))
             _c1=st.columns(3)
             with _c1[0]:
-                pb_color_scatter=st.color_picker("Points","#2563EB",key="pcs")
+                pb_color_scatter=st.color_picker(t("Points"),"#2563EB",key="pcs")
             with _c1[1]:
-                pb_color_identity=st.color_picker("Identity","#9CA3AF",key="pci")
+                pb_color_identity=st.color_picker(t("Identity"),"#9CA3AF",key="pci")
             with _c1[2]:
-                pb_color_regression=st.color_picker("Fit","#DC2626",key="pcr")
+                pb_color_regression=st.color_picker(t("Fit"),"#DC2626",key="pcr")
             pb_show_ci  = st.toggle(t("Show 95% CI band"), value=True, key="psc")
             _c2=st.columns([1,2])
             with _c2[0]:
-                pb_color_ci=st.color_picker("CI band","#DC2626",key="pcc")
+                pb_color_ci=st.color_picker(t("CI band"),"#DC2626",key="pcc")
             with _c2[1]:
                 pb_ci_alpha=st.slider(t("CI transparency"),0.0,1.0,0.15,0.01,key="pca")
 
             st.markdown(t("**Bland–Altman plot**"))
             _c3=st.columns(3)
             with _c3[0]:
-                ba_color_scatter=st.color_picker("Points","#2563EB",key="bcs")
+                ba_color_scatter=st.color_picker(t("Points"),"#2563EB",key="bcs")
             with _c3[1]:
-                ba_color_mean=st.color_picker("Mean bias","#DC2626",key="bcm")
+                ba_color_mean=st.color_picker(t("Mean bias"),"#DC2626",key="bcm")
             with _c3[2]:
-                ba_color_loa=st.color_picker("LoA","#F97316",key="bcl")
+                ba_color_loa=st.color_picker(t("LoA"),"#F97316",key="bcl")
 
         # -- Legend & annotation text -----------------------------------------
         with st.expander(t("✏️ Legend & label text")):
@@ -537,21 +684,21 @@ with st.sidebar:
             ba_label_loa_lower=st.text_input(t("Lower LoA"),  "−1,96 SD",   key="bll")
 
     elif analysis_type == "Confusion Matrix":
-        st.markdown(t("##### ④ &nbsp;Breakpoints"))
+        _step(4, "Breakpoints")
         bp_system=st.selectbox(t("Breakpoint system"),["EUCAST","CLSI"],key="bps",
             help="Determines the S / I / R categories used for "
-                 "categorical agreement, VME and ME.")
+                 "categorical agreement, VME and ME.", format_func=t)
         st.caption(f"**{x_label}**")
         _bp1=st.columns(2)
-        bp_s_x=_bp1[0].number_input("S ≥ (mm)",value=20.0,step=0.5,key="bsx")
-        bp_r_x=_bp1[1].number_input("R ≤ (mm)",value=16.0,step=0.5,key="brx")
+        bp_s_x=_bp1[0].number_input(t("S ≥ (mm)"),value=20.0,step=0.5,key="bsx")
+        bp_r_x=_bp1[1].number_input(t("R ≤ (mm)"),value=16.0,step=0.5,key="brx")
         st.caption(f"**{y_label}**")
         _bp2=st.columns(2)
-        bp_s_y=_bp2[0].number_input("S ≥ (mm)",value=20.0,step=0.5,key="bsy")
-        bp_r_y=_bp2[1].number_input("R ≤ (mm)",value=16.0,step=0.5,key="bry")
+        bp_s_y=_bp2[0].number_input(t("S ≥ (mm)"),value=20.0,step=0.5,key="bsy")
+        bp_r_y=_bp2[1].number_input(t("R ≤ (mm)"),value=16.0,step=0.5,key="bry")
         st.divider()
 
-        st.markdown(t("##### ⑤ &nbsp;Matrix options"))
+        _step(5, "Matrix options")
 
         # -- Essentials --------------------------------------------------------
         cm_step=st.number_input(t("Step size (mm per cell)"),1,10,1,1,key="cms",
@@ -564,10 +711,10 @@ with st.sidebar:
         with st.expander(t("📐 Range & layout")):
             st.caption(t("Leave blank for automatic range."))
             _cc=st.columns(2)
-            cm_x_min=_ca(_cc[0].text_input("X min","",placeholder="auto",key="cxn"))
-            cm_x_max=_ca(_cc[1].text_input("X max","",placeholder="auto",key="cxx"))
-            cm_y_min=_ca(_cc[0].text_input("Y min","",placeholder="auto",key="cyn"))
-            cm_y_max=_ca(_cc[1].text_input("Y max","",placeholder="auto",key="cyx"))
+            cm_x_min=_ca(_cc[0].text_input(t("X min"),"",placeholder="auto",key="cxn"))
+            cm_x_max=_ca(_cc[1].text_input(t("X max"),"",placeholder="auto",key="cxx"))
+            cm_y_min=_ca(_cc[0].text_input(t("Y min"),"",placeholder="auto",key="cyn"))
+            cm_y_max=_ca(_cc[1].text_input(t("Y max"),"",placeholder="auto",key="cyx"))
             cm_show_diag  =st.toggle(t("Show diagonal lines"),value=True,key="csd")
             cm_show_totals=st.toggle(t("Show n = total (outside frame)"),
                                      value=True,key="cst")
@@ -579,7 +726,7 @@ with st.sidebar:
 
         # -- Colours -----------------------------------------------------------
         with st.expander(t("🎨 Colours")):
-            cm_base_color=st.color_picker("Matrix colour","#1D4ED8",key="cbc")
+            cm_base_color=st.color_picker(t("Matrix colour"),"#1D4ED8",key="cbc")
             cm_scale_max =st.slider(t("Coloured bands (mm from diagonal)"),
                 1,10,2,key="csc",
                 help="How far from perfect agreement the shading extends.")
@@ -591,13 +738,13 @@ with st.sidebar:
             _nc=st.columns(2)
             with _nc[0]:
                 cm_num_color_on_blue =st.color_picker(
-                    "On shaded cells","#1E3A5F",key="cnb")
+                    t("On shaded cells"),"#1E3A5F",key="cnb")
             with _nc[1]:
                 cm_num_color_on_white=st.color_picker(
-                    "On white cells","#1E3A5F",key="cnw")
+                    t("On white cells"),"#1E3A5F",key="cnw")
 
     elif analysis_type == "Fourfold table (qualitative)":
-        st.markdown(t("##### ④ &nbsp;Fourfold table options"))
+        _step(4, "Fourfold table options")
 
         ff_analyte = st.text_input(t("Analysis / question"), value="",
             placeholder=t("e.g. hs-Troponin I, cut-off 26 ng/L"), key="ff_an")
@@ -636,7 +783,7 @@ with st.sidebar:
                                format_func=lambda v: f"{v:.0%}", key="ff_conf")
 
     else:   # Precision Evaluation (EP15-A3)
-        st.markdown(t("##### ④ &nbsp;Precision options"))
+        _step(4, "Precision options")
         st.caption(t("EP15-A3 recommends 5 replicates × 5 days "
                    "(minimum 2 × 2)."))
 
@@ -733,7 +880,7 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 method_label = ("Weighted Deming" if deming_weighted else "Deming") \
                if analysis_type=="Deming" else analysis_type
-st.title(f"Method Comparison — {method_label}")
+st.title(f"{t('Method Comparison')} — {t(method_label)}")
 
 if _sid_err:
     st.error(f"Could not read file: {_sid_err}")
@@ -790,41 +937,41 @@ Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
             with fc1:
                 st.markdown(t("**📄 Expected data format**"))
 
-                _wt1, _wt2 = st.tabs(["Regression / Confusion matrix", "Precision Evaluation"])
+                _wt1, _wt2 = st.tabs([t("Regression / Confusion matrix"), t("Precision Evaluation")])
 
                 with _wt1:
                     st.markdown(t("At least two numeric columns — one per method. "
                                 "Extra columns (species, antibiotic, lab) can be used to filter rows."))
-                    st.dataframe(pd.DataFrame({
+                    st.dataframe(_tdf(pd.DataFrame({
                         "Species":        ["E. coli","E. coli","K. pneumoniae","S. aureus"],
                         "Reference (mm)": [18, 20, 22, 24],
                         "Candidate (mm)": [19, 20, 23, 25],
-                    }), use_container_width=True, hide_index=True)
+                    })), use_container_width=True, hide_index=True)
                     st.caption(t("Accepted: Excel (.xlsx/.xls), CSV, or paste from Excel. "
                                "Comma or point as decimal. Header row optional."))
 
                 with _wt2:
                     st.markdown(t("**One column per day, one row per replicate.** "
                                 "EP15-A3 recommends 5 replicates × 5 days at ≥ 2 concentration levels."))
-                    st.dataframe(pd.DataFrame({
+                    st.dataframe(_tdf(pd.DataFrame({
                         "Day 1": [2.015, 2.013, 1.963, 2.001, 1.998],
                         "Day 2": [2.019, 2.002, 1.979, 2.010, 1.995],
                         "Day 3": [2.025, 1.959, 2.000, 1.988, 2.005],
                         "Day 4": [1.972, 1.950, 1.973, 1.965, 1.980],
                         "Day 5": [1.981, 1.956, 1.957, 1.970, 1.975],
-                    }), use_container_width=True, hide_index=True)
+                    })), use_container_width=True, hide_index=True)
                     st.caption(t("Upload as Excel / CSV or paste directly from Excel. "
                                "Column headers become the day labels. Comma or point as decimal."))
 
                     st.markdown(t("**Example output:**"))
-                    st.dataframe(pd.DataFrame({
+                    st.dataframe(_tdf(pd.DataFrame({
                         "Component":              ["Within-run (repeatability)",
                                                    "Between-day",
                                                    "Within-laboratory (total)"],
                         "SD":                     ["0,0235", "0,0116", "0,0262"],
                         "CV (%)":                 ["1,18",   "—",      "1,32"],
                         "Degrees of freedom":     ["10",     "4",      "12,8 (eff.)"],
-                    }), use_container_width=True, hide_index=True)
+                    })), use_container_width=True, hide_index=True)
 
             with fc2:
                 st.markdown(t("**📚 Key references**"))
@@ -850,10 +997,10 @@ Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
             return None,None
         try:
             _df=parse_pasted(pasted_text)
-            st.success(f"✅ Parsed {len(_df)} rows.")
+            st.success(t("✅ Parsed {n} rows.").format(n=len(_df)))
             return _df["reference"].values, _df["candidate"].values
         except ValueError as e:
-            st.error(str(e)); return None,None
+            st.error(t(str(e))); return None,None
 
 if analysis_type == "Precision Evaluation (EP15-A3)":
     x_raw = y_raw = np.array([1.0, 2.0])  # dummy — precision has its own input
@@ -880,9 +1027,9 @@ if analysis_type != "Precision Evaluation (EP15-A3)":
     n_tot=len(x_raw)
     n_mis=int(np.sum(~(np.isfinite(x_raw)&np.isfinite(y_raw))))
     _c1,_c2,_c3=st.columns(3)
-    _c1.metric("Total rows",n_tot)
-    _c2.metric("Missing / excluded",n_mis)
-    _c3.metric("Valid pairs",n_tot-n_mis)
+    _c1.metric(t("Total rows"),n_tot)
+    _c2.metric(t("Missing / excluded"),n_mis)
+    _c3.metric(t("Valid pairs"),n_tot-n_mis)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -952,8 +1099,8 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.info(f"**{len(_excl)} point(s) excluded** — "
                 f"statistics and both plots use the remaining {len(_kept)} of {_n_all}.")
 
-    st.subheader(f"Results — {st.session_state.get('reg_method',method_label)}")
-    st.dataframe(pd.DataFrame([
+    st.subheader(f"{t('Results')} — {t(st.session_state.get('reg_method', method_label))}")
+    st.dataframe(_tdf(pd.DataFrame([
         {"Statistic":"Slope","Value":fmt(rr["slope"],decimals),
          "95% CI":f"[{fmt(rr['slope_lower'],decimals)} – {fmt(rr['slope_upper'],decimals)}]"},
         {"Statistic":"Intercept","Value":fmt(rr["intercept"],decimals),
@@ -963,7 +1110,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
         {"Statistic":"Bias",      "Value":fmt(ss["bias"],decimals),     "95% CI":"—"},
         {"Statistic":"LoA lower", "Value":fmt(ss["loa_lower"],decimals),"95% CI":"—"},
         {"Statistic":"LoA upper", "Value":fmt(ss["loa_upper"],decimals),"95% CI":"—"},
-    ]),use_container_width=True,hide_index=True)
+    ])),use_container_width=True,hide_index=True)
 
     _cp,_cb=st.columns(2)
     # Auto-title from method name when user leaves title blank
@@ -1044,7 +1191,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.rerun()
 
     # ── Manual exclusion list (fallback + undo) ───────────────────────────────
-    with st.expander(f"🗑 Excluded points ({len(_excl)})", expanded=bool(_excl)):
+    with st.expander(t("🗑 Excluded points ({n})").format(n=len(_excl)), expanded=bool(_excl)):
         _opts = list(range(_n_all))
         def _lbl(i):
             return f"#{i+1}:  {fmt(float(_x_all[i]),decimals)} / {fmt(float(_y_all[i]),decimals)}"
@@ -1055,9 +1202,12 @@ if analysis_type in ("Passing–Bablok","Deming"):
             options=_opts, format_func=_lbl, key="excl_multi")
         if set(_picked) != _excl:
             st.rerun()
-        if _excl and st.button(t("↺ Restore all points"), key="restore_all"):
+        # Callback: runs BEFORE the widgets are created on the next run, which
+        # is the only point where a widget's own session_state key may change.
+        def _restore_all():
             st.session_state["excl_multi"] = []
-            st.rerun()
+        if _excl:
+            st.button(t("↺ Restore all points"), key="restore_all", on_click=_restore_all)
 
     st.subheader(t("Export"))
     with st.expander(t("⚙️ Image resolution"),expanded=True):
@@ -1073,12 +1223,12 @@ if analysis_type in ("Passing–Bablok","Deming"):
         (render_pb_png,_pkw,"Regression plot","reg"),
         (render_ba_png,_bkw,"Bland–Altman plot","ba"),
     ]:
-        st.markdown(f"**{_lbl}**")
+        st.markdown(f"**{t(_lbl)}**")
         _e1,_e2,_=st.columns([1,1,2])
         _e1.download_button(f"🖼 PNG ({_dp} dpi)",
             mpl_fig_to_png_bytes(_rfn(_x,_y,dpi=_dp,width_px=_iw,height_px=_ih,**_kw),dpi=_dp),
             f"{_slg}_{_dp}dpi.png","image/png",key=f"png_{_slg}")
-        _e2.download_button("📐 SVG",
+        _e2.download_button(t("📐 SVG"),
             mpl_fig_to_svg_bytes(_rfn(_x,_y,dpi=_dp,width_px=_iw,height_px=_ih,**_kw)),
             f"{_slg}.svg","image/svg+xml",key=f"svg_{_slg}")
 
@@ -1091,9 +1241,9 @@ if analysis_type in ("Passing–Bablok","Deming"):
     if _excl:
         _csv_txt += ("Excluded point numbers,"
                      + " ".join(str(i+1) for i in sorted(_excl)) + "\n")
-    _f1.download_button("📥 Results CSV", text_to_csv_bytes(_csv_txt),
+    _f1.download_button(t("📥 Results CSV"), text_to_csv_bytes(_csv_txt),
                         "results.csv", "text/csv", key="rcsv")
-    _f2.download_button("📄 HTML Report",
+    _f2.download_button(t("📄 HTML Report"),
         build_html_report(rr,ss,fig_pb,fig_ba,x_label=x_label,y_label=y_label),
         "report.html","text/html",key="rhtml")
 
@@ -1112,6 +1262,9 @@ if analysis_type in ("Passing–Bablok","Deming"):
             if _pos < _n_all:
                 _rep_out.at[_ridx, "Status"] = (
                     "Excluded" if _pos in _excl else "Included")
+        for _k2, _ridx in enumerate(_m_idx):
+            if not (np.isfinite(_va[_k2]) and np.isfinite(_vb[_k2])):
+                _rep_out.at[_ridx, "Status"] = "Not used"
 
         _xlsx_out = build_matched_excel(
             _rep_out, _lf_label_a, _lf_label_b, _lf_analyte)
@@ -1119,7 +1272,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.markdown(t("**Matched pairs data**"))
         _fx1,_fx2,_=st.columns([1,1,2])
         _fx1.download_button(
-            "📊 Download matched pairs (Excel)",
+            t("📊 Download matched pairs (Excel)"),
             _xlsx_out,
             f"matched_pairs_{_lf_analyte}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1154,21 +1307,21 @@ elif analysis_type == "Confusion Matrix":
                 f"{y_label}: S≥{bp_s_y:.1f}/R≤{bp_r_y:.1f} mm")
 
     _m1,_m2,_m3,_m4,_m5=st.columns(5)
-    _m1.metric("EA ±1 mm", f"{ea['ea_1mm']:.1f}%",f"{ea['n_ea1']}/{ea['n']}")
-    _m2.metric("EA ±2 mm", f"{ea['ea_2mm']:.1f}%",f"{ea['n_ea2']}/{ea['n']}")
-    _m3.metric("Categorical Agr.",f"{ca['ca']:.1f}%",f"{ca['n_ca']}/{ca['n']}")
-    _m4.metric("VME (R→S)", f"{ca['vme']:.1f}%",
+    _m1.metric(t("EA ±1 mm"), f"{ea['ea_1mm']:.1f}%",f"{ea['n_ea1']}/{ea['n']}")
+    _m2.metric(t("EA ±2 mm"), f"{ea['ea_2mm']:.1f}%",f"{ea['n_ea2']}/{ea['n']}")
+    _m3.metric(t("Categorical Agr."),f"{ca['ca']:.1f}%",f"{ca['n_ca']}/{ca['n']}")
+    _m4.metric(t("VME (R→S)"), f"{ca['vme']:.1f}%",
                f"{ca['n_vme']} of {ca['n_r_ref']} R",delta_color="inverse",
                help="Very major error = false susceptibility. Reference "
                     "resistant, candidate susceptible. Percentage of "
                     "RESISTANT isolates. CLSI/FDA limit 1.5–3 %.")
-    _m5.metric("ME (S→R)",  f"{ca['me']:.1f}%",
+    _m5.metric(t("ME (S→R)"),  f"{ca['me']:.1f}%",
                f"{ca['n_me']} of {ca['n_s_ref']} S",delta_color="inverse",
                help="Major error = false resistance. Reference susceptible, "
                     "candidate resistant. Percentage of SUSCEPTIBLE isolates. "
                     "CLSI/FDA limit 3 %.")
     if ca["n_minor"]>0:
-        st.caption(f"Minor errors: {ca['n_minor']} ({ca['minor_e']:.1f}%)")
+        st.caption(t("Minor errors: {n} ({p} %)").format(n=ca['n_minor'], p=fmt(ca['minor_e'], 1)))
 
     with st.expander(t("ℹ️ Acceptability thresholds")):
         st.markdown(t("""
@@ -1210,7 +1363,7 @@ elif analysis_type == "Confusion Matrix":
                       index=[str(int(b)) for b in y_bins],
                       columns=[str(int(b)) for b in x_bins])
     _mdf.index.name=f"{y_label}\\{x_label}"
-    _d2.download_button("📥 Matrix CSV",
+    _d2.download_button(t("📥 Matrix CSV"),
                         to_csv_bytes(_mdf, index=True),
                         "confusion_matrix.csv","text/csv",key="ccsv")
 
@@ -1240,7 +1393,7 @@ elif analysis_type == "Fourfold table (qualitative)":
         st.error(f'{t("Could not build the table")}: {_e}')
         st.stop()
 
-    _warn = check_prerequisites(_ff)
+    _warn = check_prerequisites(_ff, t=t)
 
     # ── Färgad 2×2-tabell ────────────────────────────────────────────────────
     st.markdown(
@@ -1292,10 +1445,10 @@ elif analysis_type == "Fourfold table (qualitative)":
 
     _rows += [
         (t("Cohen's kappa"), _p3(_ff["kappa"]), _ciw(_ff["kappa_ci"], _p3),
-         _ff["kappa_tolkning"]),
+         t(_ff["kappa_tolkning"])),
         (t("McNemar test (p)"),
          ("< 0,001" if _ff["mcnemar_p"] < 0.001 else _p3(_ff["mcnemar_p"])),
-         _ff["mcnemar_metod"],
+         t(_ff["mcnemar_metod"]),
          t("systematic difference") if _ff["mcnemar_p"] < 0.05 else t("none detected")),
     ]
 
@@ -1305,7 +1458,7 @@ elif analysis_type == "Fourfold table (qualitative)":
     _h2.metric(_head[3], _p1(_head[4]), f"{_ciw(_head[5])} {_KI}")
 
     st.dataframe(
-        pd.DataFrame(_rows, columns=[t("Measure"), t("Value"), _KI, t("Count / interpretation")]),
+        _tdf(pd.DataFrame(_rows, columns=[t("Measure"), t("Value"), _KI, t("Count / interpretation")])),
         use_container_width=True, hide_index=True)
 
     if _warn:
@@ -1346,7 +1499,7 @@ prevalence.
         pos_label=ff_pos_label, neg_label=ff_neg_label, warnings=_warn, t=t)
     _e1,_e2,_ = st.columns([1,1,2])
     _e1.download_button(
-        "📊 Ladda ner fyrfältstabell (Excel)", _ff_xl,
+        t("📊 Download fourfold table (Excel)"), _ff_xl,
         f"fyrfaltstabell{('_'+ff_analyte.replace(' ','_')) if ff_analyte else ''}.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="ff_xl")
@@ -1361,7 +1514,7 @@ prevalence.
         ["McNemar p", fmt(_ff["mcnemar_p"],4)],
     ]
     _e2.download_button(
-        "📥 Resultat (CSV)",
+        t("📥 Results (CSV)"),
         to_csv_bytes(pd.DataFrame(_ff_rows, columns=["Mått","Värde"])),
         "fyrfaltstabell.csv", "text/csv", key="ff_csv")
 
@@ -1373,9 +1526,9 @@ else:
     st.subheader(t("Precision Evaluation — CLSI EP15-A3"))
 
     _pr_tab1, _pr_tab2, _pr_tab3 = st.tabs([
-        "📂 Wide format (columns = days)",
-        "📋 Paste wide format",
-        "🔍 Long format (search by Sample ID)",
+        t("📂 Wide format (columns = days)"),
+        t("📋 Paste wide format"),
+        t("🔍 Long format (search by Sample ID)"),
     ])
 
     _pr_data_dict = None
@@ -1394,8 +1547,8 @@ else:
                     _pr_df = pd.read_csv(BytesIO(_pr_rb), sep=None, engine="python")
                 _pr_df.columns = [f"Column {i+1}" if str(c).strip().lstrip("-").isdigit()
                                    else str(c) for i,c in enumerate(_pr_df.columns)]
-                st.caption(f"Preview — {len(_pr_df)} replicates × "
-                           f"{len(_pr_df.columns)} days (all rows shown):")
+                st.caption(t("Preview — {r} replicates × {d} days (all rows shown):")
+                           .format(r=len(_pr_df), d=len(_pr_df.columns)))
                 st.dataframe(_pr_df, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df)
             except Exception as _e:
@@ -1413,8 +1566,8 @@ else:
                 if _pr_df2.shape[1] < 2:
                     _pr_df2 = pd.read_csv(_SIO(_pr_paste), sep="\t")
                 _pr_df2.columns = [str(c) for c in _pr_df2.columns]
-                st.caption(f"Preview — {len(_pr_df2)} replicates × "
-                           f"{len(_pr_df2.columns)} days (all rows shown):")
+                st.caption(t("Preview — {r} replicates × {d} days (all rows shown):")
+                           .format(r=len(_pr_df2), d=len(_pr_df2.columns)))
                 st.dataframe(_pr_df2, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df2)
             except Exception as _e:
@@ -1432,7 +1585,7 @@ else:
                 _pr_hdr_choice = st.radio(
                     t("Header row?"), ["Yes (first row)", "No header"],
                     horizontal=True, key="lf_pr_hdr",
-                    help="Choose 'No header' if the very first row is already data.")
+                    help="Choose 'No header' if the very first row is already data.", format_func=t)
                 _pr_has_hdr = _pr_hdr_choice == "Yes (first row)"
                 _lf_pr_df  = load_long_format(_lf_pr_rb, _lf_pr_file.name,
                                               has_header=_pr_has_hdr)
@@ -1440,10 +1593,10 @@ else:
                     st.caption(t("Columns named Column 1, Column 2 … — first row kept as data."))
                 _lf_pr_cols= list(_lf_pr_df.columns)
                 _lfc=st.columns(3)
-                _lf_pr_id_col  =_lfc[0].selectbox("Sample ID column",_lf_pr_cols,key="lf_pr_id")
-                _lf_pr_res_col =_lfc[1].selectbox("Result column",_lf_pr_cols,
+                _lf_pr_id_col  =_lfc[0].selectbox(t("Sample ID column"),_lf_pr_cols,key="lf_pr_id")
+                _lf_pr_res_col =_lfc[1].selectbox(t("Result column"),_lf_pr_cols,
                                                     index=min(2,len(_lf_pr_cols)-1),key="lf_pr_res")
-                _lf_pr_sort_col=_lfc[2].selectbox("Sort by (run order/date)",
+                _lf_pr_sort_col=_lfc[2].selectbox(t("Sort by (run order/date)"),
                                                     ["N/A"]+_lf_pr_cols,key="lf_pr_sort")
                 _lf_pr_sort=None if _lf_pr_sort_col=="N/A" else _lf_pr_sort_col
                 _an_cols=[c for c in _lf_pr_cols if c not in [_lf_pr_id_col,_lf_pr_res_col]]
@@ -1463,7 +1616,7 @@ else:
                     key="lf_pr_grpmode",
                     help="If your file has a Date column, grouping by it is "
                          "safer — the number of replicates per day can differ "
-                         "between analytes.")
+                         "between analytes.", format_func=t)
                 _lf_pr_group = None
                 _lf_pr_n = 5
                 if _pr_grp_mode == "Group by a date / day column":
@@ -1481,7 +1634,7 @@ else:
                 _prev_mask=_lf_pr_df[_lf_pr_id_col].astype(str)==_prlf_sample_id
                 if _lf_pr_analyte and _lf_pr_an_col != "N/A":
                     _prev_mask&=_lf_pr_df[_lf_pr_an_col].astype(str)==_lf_pr_analyte
-                st.caption(f"Preview — {_prev_mask.sum()} rows for this sample:")
+                st.caption(t("Preview — {n} rows for this sample:").format(n=int(_prev_mask.sum())))
                 st.dataframe(_lf_pr_df[_prev_mask].head(10),use_container_width=True)
                 _prlf_dd,_prlf_raw_df,_prlf_nl=extract_precision_replicates(
                     _lf_pr_df,_lf_pr_id_col,_lf_pr_res_col,_prlf_sample_id,
@@ -1492,12 +1645,19 @@ else:
                     group_col=_lf_pr_group,
                 )
                 _pr_data_dict=_prlf_dd
-                if _prlf_nl>0:
-                    st.warning(f"⚠️ {_prlf_nl} trailing result(s) excluded (incomplete day).")
                 _nrep = len(next(iter(_prlf_dd.values())))
-                st.success(f"✅ {len(_prlf_dd)} days × {_nrep} replicates ready.")
+                if _prlf_nl > 0 and _lf_pr_group:
+                    st.warning(t("⚠️ {n} result(s) not used: the calculation requires the "
+                                 "same number of replicates every day, so each day was "
+                                 "limited to its first {m} results. They are marked in "
+                                 "the raw data.").format(n=_prlf_nl, m=_nrep))
+                elif _prlf_nl > 0:
+                    st.warning(t("⚠️ {n} trailing result(s) excluded (incomplete day).")
+                               .format(n=_prlf_nl))
+                st.success(t("✅ {d} days × {r} replicates ready.").format(
+                    d=len(_prlf_dd), r=_nrep))
             except Exception as _e:
-                st.error(f"Error: {_e}")
+                st.error(f"{t('Error')}: {_e}")
 
     if _pr_data_dict is None:
         st.info(t("Choose a data source above to begin the precision analysis."))
@@ -1535,10 +1695,10 @@ else:
     st.divider()
     st.subheader(t("Precision Results"))
     _di1,_di2,_di3,_di4 = st.columns(4)
-    _di1.metric("Grand mean",    _pf(_pr["grand_mean"]))
-    _di2.metric("Days",          str(_pr["D"]))
-    _di3.metric("Replicates / day", str(_pr["n"]))
-    _di4.metric("Total measurements", str(_pr["D"] * _pr["n"]))
+    _di1.metric(t("Grand mean"),    _pf(_pr["grand_mean"]))
+    _di2.metric(t("Days"),          str(_pr["D"]))
+    _di3.metric(t("Replicates / day"), str(_pr["n"]))
+    _di4.metric(t("Total measurements"), str(_pr["D"] * _pr["n"]))
 
     st.divider()
 
@@ -1547,23 +1707,26 @@ else:
     with _h1:
         st.markdown("""
 <div style="background:#EFF6FF;border-radius:12px;padding:20px 24px;border:1px solid #BFDBFE">
-<p style="margin:0;font-size:0.78rem;color:#1E40AF;font-weight:600;letter-spacing:0.05em">WITHIN-RUN (REPEATABILITY)</p>
+<p style="margin:0;font-size:0.78rem;color:#1E40AF;font-weight:600;letter-spacing:0.05em">{h}</p>
 <p style="margin:4px 0 0;font-size:2rem;font-weight:700;color:#1E3A5F">CV = {cv} %</p>
 <p style="margin:2px 0 0;font-size:1.1rem;color:#2563EB">SD = {sd}</p>
-<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">df = {df} &nbsp;|&nbsp; Protocol: CLSI EP15-A3</p>
+<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">df = {df} &nbsp;|&nbsp; {p}</p>
 </div>
-""".format(sd=_pf(_pr["sr"]), cv=_pf(_pr["cv_r"]), df=_pr["df_within"]),
+""".format(sd=_pf(_pr["sr"]), cv=_pf(_pr["cv_r"]), df=_pr["df_within"],
+           h=t("WITHIN-RUN (REPEATABILITY)"), p=t("Protocol: CLSI EP15-A3")),
         unsafe_allow_html=True)
 
     with _h2:
         st.markdown("""
 <div style="background:#F0FDF4;border-radius:12px;padding:20px 24px;border:1px solid #BBF7D0">
-<p style="margin:0;font-size:0.78rem;color:#166534;font-weight:600;letter-spacing:0.05em">WITHIN-LABORATORY (TOTAL IMPRECISION)</p>
+<p style="margin:0;font-size:0.78rem;color:#166534;font-weight:600;letter-spacing:0.05em">{h}</p>
 <p style="margin:4px 0 0;font-size:2rem;font-weight:700;color:#14532D">CV = {cv} %</p>
 <p style="margin:2px 0 0;font-size:1.1rem;color:#16A34A">SD = {sd}</p>
-<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">eff. df = {df} &nbsp;|&nbsp; Includes between-day variation</p>
+<p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">{e} = {df} &nbsp;|&nbsp; {i}</p>
 </div>
-""".format(sd=_pf(_pr["sl"]), cv=_pf(_pr["cv_l"]), df=f"{_pr['T']:.1f}"),
+""".format(sd=_pf(_pr["sl"]), cv=_pf(_pr["cv_l"]), df=f"{_pr['T']:.1f}",
+           h=t("WITHIN-LABORATORY (TOTAL IMPRECISION)"), e=t("eff. df"),
+           i=t("Includes between-day variation")),
         unsafe_allow_html=True)
 
     if _pr["sb2"] <= 0:
@@ -1585,31 +1748,32 @@ else:
 <div style="background:#F8FAFC;border-radius:12px;padding:16px 24px;
             border:1px solid #E2E8F0;border-left:4px solid #94A3B8">
 <p style="margin:0;font-size:0.78rem;color:#475569;font-weight:600;letter-spacing:0.05em">
-TOTAL IMPRECISION — SIMPLE POOLED CALCULATION (all {nm} results as one set)</p>
+{h}</p>
 <p style="margin:4px 0 0;font-size:1.5rem;font-weight:700;color:#334155">
 CV = {cv} %</p>
 <p style="margin:2px 0 0;font-size:1rem;color:#64748B">SD = {sd}</p>
 <p style="margin:8px 0 0;font-size:0.75rem;color:#64748B">
-df = {df} &nbsp;|&nbsp; ordinary SD of every measurement, day structure ignored</p>
+df = {df} &nbsp;|&nbsp; {o}</p>
 </div>
-""".format(nm=_pr["n_total_meas"], cv=_pf(_pr["pooled_cv"]),
-           sd=_pf(_pr["pooled_sd"]), df=_pr["pooled_df"]),
+""".format(cv=_pf(_pr["pooled_cv"]), sd=_pf(_pr["pooled_sd"]), df=_pr["pooled_df"],
+           h=t("TOTAL IMPRECISION — SIMPLE POOLED CALCULATION "
+               "(all {nm} results as one set)").format(nm=_pr["n_total_meas"]),
+           o=t("ordinary SD of every measurement, day structure ignored")),
         unsafe_allow_html=True)
 
     with st.expander(t("ℹ️ Why does this differ from the CLSI value?")):
-        st.markdown(f"""
+        st.markdown(t("""
 The **CLSI within-laboratory SD** separates the data into a within-run and a
 between-day component and adds them on the variance scale
 (Sl² = Sr² + Sb²). The **simple pooled SD** ignores the day structure and
-treats all {_pr['n_total_meas']} results as a single sample.
+treats all {n} results as a single sample.
 
 The two are related exactly, in expectation, by
 
-E[s²pooled] = Sr² + **{_pr['pooled_shrink']:.4f}** × Sb²  where the factor is (D−1)n / (Dn−1)
+E[s²pooled] = Sr² + **{f}** × Sb²  where the factor is (D−1)n / (Dn−1)
 
 So the simple calculation shrinks the between-day component by
-**{100*(1-_pr['pooled_shrink']):.1f} %** with your design of
-{_pr['D']} days × {_pr['n']} replicates. Consequences:
+**{p} %** with your design of {D} days × {r} replicates. Consequences:
 
 - If there is **no** day-to-day effect (Sb² = 0) the two agree closely.
 - If a real day effect exists, the pooled value is **biased low** and
@@ -1619,7 +1783,8 @@ So the simple calculation shrinks the between-day component by
 Report the **CLSI value** for method validation and verification against a
 manufacturer's claim. The pooled figure is provided for reference and for
 comparison with sources that use the simplified approach.
-""")
+""").format(n=_pr['n_total_meas'], f=f"{_pr['pooled_shrink']:.4f}",
+            p=f"{100*(1-_pr['pooled_shrink']):.1f}", D=_pr['D'], r=_pr['n']))
 
     st.markdown("")   # spacer
 
@@ -1627,10 +1792,10 @@ comparison with sources that use the simplified approach.
     st.markdown(t("**Sammanfattning**"))
     def _pct(v): return f"{v:.1f}".replace(".", ",") + "%"
     _summary_df = pd.DataFrame({
-        (_prlf_analyte_sel or "Analys"): [
-            "Antal:", "MV:", "SD:", "CV%:", "Min:", "Max:",
-            "Inomserieprecision CV%:", "Totalimprecision CV%:"],
-        (_prlf_sample_id or "Kontroll"): [
+        (_prlf_analyte_sel or t("Analysis")): [
+            t("Count:"), t("Mean:"), "SD:", "CV%:", "Min:", "Max:",
+            t("Within-run precision CV%:"), t("Total imprecision CV%:")],
+        (_prlf_sample_id or t("Control")): [
             str(_pr["n_total_meas"]),
             _pf(_pr["grand_mean"]),
             _pf(_pr["pooled_sd"]),
@@ -1642,15 +1807,14 @@ comparison with sources that use the simplified approach.
         ],
     })
     st.dataframe(_summary_df, use_container_width=False, hide_index=True)
-    st.caption(
-        f"SD och CV% avser samtliga {_pr['n_total_meas']} mätningar sammanslagna. "
-        f"Inomserieprecision och totalimprecision enligt CLSI EP15-A3. "
-        f"Upplägg: {_pr['D']} dagar × {_pr['n']} replikat."
-    )
+    st.caption(t("SD and CV% refer to all {n} measurements pooled. Within-run "
+                 "precision and total imprecision according to CLSI EP15-A3. "
+                 "Design: {D} days × {r} replicates.")
+               .format(n=_pr['n_total_meas'], D=_pr['D'], r=_pr['n']))
 
     # ── Full breakdown table ──────────────────────────────────────────────────
     with st.expander(t("📊 Full variance component breakdown"), expanded=False):
-        st.dataframe(pd.DataFrame([
+        st.dataframe(_tdf(pd.DataFrame([
             {"Component": "Within-run (Sᵣ)",
              "SD":     _pf(_pr["sr"]),
              "CV (%)": _pf(_pr["cv_r"]),
@@ -1671,7 +1835,7 @@ comparison with sources that use the simplified approach.
              "CV (%)": _pf(_pr["pooled_cv"]),
              "Variance (SD²)": _pf(_pr["pooled_sd"]**2),
              "df":     str(_pr["pooled_df"])},
-        ]), use_container_width=True, hide_index=True)
+        ])), use_container_width=True, hide_index=True)
 
     # ── Verification against manufacturer claims ──────────────────────────────
     if prec_claimed_sr is not None or prec_claimed_sl is not None:
@@ -1695,14 +1859,14 @@ comparison with sources that use the simplified approach.
                 "Verification value":_pf(_pr["verif_sl"]),
                 "Verdict":           "✅  PASS" if _pr["pass_sl"] else "❌  FAIL",
             })
-        st.dataframe(pd.DataFrame(_vrows), use_container_width=True, hide_index=True)
+        st.dataframe(_tdf(pd.DataFrame(_vrows)), use_container_width=True, hide_index=True)
 
     # ── Per-day summary ───────────────────────────────────────────────────────
     with st.expander(t("📋 Per-day summary")):
         _day_df = pd.DataFrame(_pr["day_summary"])
         for _col in ["Mean","SD","CV (%)","Min","Max"]:
             _day_df[_col] = _day_df[_col].map(_pf)
-        st.dataframe(_day_df, use_container_width=True, hide_index=True)
+        st.dataframe(_tdf(_day_df), use_container_width=True, hide_index=True)
 
     # ── Outliers ──────────────────────────────────────────────────────────────
     if _pr["outliers"]:
@@ -1712,7 +1876,7 @@ comparison with sources that use the simplified approach.
         _ol_df = pd.DataFrame(_pr["outliers"])
         _ol_df["Deviation / Sᵣ"] = _ol_df["Deviation / Sr"].map(lambda v: f"{v:.2f}")
         _ol_df = _ol_df.drop(columns=["Deviation / Sr"])
-        st.dataframe(_ol_df, use_container_width=True, hide_index=True)
+        st.dataframe(_tdf(_ol_df), use_container_width=True, hide_index=True)
 
     # ── Export — journal-style table ──────────────────────────────────────────
     st.divider()
@@ -1743,26 +1907,26 @@ comparison with sources that use the simplified approach.
 
     # Precision summary footer rows (span Day column; values in Mean col for alignment)
     _footer = [
-        {"Day": "Within-run (repeatability)ᵃ",
+        {"Day": t("Within-run (repeatability)") + "ᵃ",
          **{f"Rep {i+1}": "" for i in range(_n_reps)},
          "Mean": "", "SD": _pf(_pr["sr"]), "CV (%)": _pf(_pr["cv_r"])},
-        {"Day": "Within-laboratory (total)ᵇ",
+        {"Day": t("Within-laboratory (total)") + "ᵇ",
          **{f"Rep {i+1}": "" for i in range(_n_reps)},
          "Mean": "", "SD": _pf(_pr["sl"]), "CV (%)": _pf(_pr["cv_l"])},
-        {"Day": "Simple pooled (all results)ᵈ",
+        {"Day": t("Simple pooled (all results)") + "ᵈ",
          **{f"Rep {i+1}": "" for i in range(_n_reps)},
          "Mean": "", "SD": _pf(_pr["pooled_sd"]), "CV (%)": _pf(_pr["pooled_cv"])},
     ]
     if prec_claimed_sr is not None:
         _footer.append({
-            "Day": "Manufacturer claim — repeatabilityᶜ",
+            "Day": t("Manufacturer claim — repeatability") + "ᶜ",
             **{f"Rep {i+1}": "" for i in range(_n_reps)},
             "Mean": "", "SD": _pf(prec_claimed_sr),
             "CV (%)": "Pass" if _pr["pass_sr"] else "Fail",
         })
     if prec_claimed_sl is not None:
         _footer.append({
-            "Day": "Manufacturer claim — within-laboratoryᶜ",
+            "Day": t("Manufacturer claim — within-laboratory") + "ᶜ",
             **{f"Rep {i+1}": "" for i in range(_n_reps)},
             "Mean": "", "SD": _pf(prec_claimed_sl),
             "CV (%)": "Pass" if _pr["pass_sl"] else "Fail",
@@ -1773,28 +1937,29 @@ comparison with sources that use the simplified approach.
 
     # Footnotes
     _footnotes = [
-        f"ᵃ Within-run SD (Sᵣ) = {_pf(_pr['sr'])}, CV% = {_pf(_pr['cv_r'])} "
-        f"(df = {_pr['df_within']}; CLSI EP15-A3).",
-        f"ᵇ Within-laboratory SD (Sₗ) = {_pf(_pr['sl'])}, CV% = {_pf(_pr['cv_l'])} "
-        f"(effective df = {_pr['T']:.1f}; includes between-day variation).",
-        f"  Grand mean = {_pf(_pr['grand_mean'])}, "
-        f"D = {_pr['D']} days, n = {_pr['n']} replicates/day.",
-        f"ᵈ Ordinary SD of all {_pr['n_total_meas']} results, day structure "
-        f"ignored (df = {_pr['pooled_df']}). Shown for reference; it shrinks "
-        f"the between-day component by a factor "
-        f"{_pr['pooled_shrink']:.3f} and is therefore biased low when a "
-        f"day effect exists.",
+        t("ᵃ Within-run SD (Sᵣ) = {sd}, CV% = {cv} (df = {df}; CLSI EP15-A3).")
+        .format(sd=_pf(_pr['sr']), cv=_pf(_pr['cv_r']), df=_pr['df_within']),
+        t("ᵇ Within-laboratory SD (Sₗ) = {sd}, CV% = {cv} (effective df = {df}; "
+          "includes between-day variation).")
+        .format(sd=_pf(_pr['sl']), cv=_pf(_pr['cv_l']), df=f"{_pr['T']:.1f}"),
+        t("  Grand mean = {m}, D = {D} days, n = {n} replicates/day.")
+        .format(m=_pf(_pr['grand_mean']), D=_pr['D'], n=_pr['n']),
+        t("ᵈ Ordinary SD of all {n} results, day structure ignored (df = {df}). "
+          "Shown for reference; it shrinks the between-day component by a "
+          "factor {f} and is therefore biased low when a day effect exists.")
+        .format(n=_pr['n_total_meas'], df=_pr['pooled_df'],
+                f=f"{_pr['pooled_shrink']:.3f}"),
     ]
     if prec_claimed_sr is not None or prec_claimed_sl is not None:
         _footnotes.append(
-            f"ᶜ Chi-square verification (α = {float(prec_alpha):.0%}, "
-            f"q = {prec_n_levels}); Pass if observed SD ≤ verification value."
-        )
+            t("ᶜ Chi-square verification (α = {a}, q = {q}); Pass if observed "
+              "SD ≤ verification value.")
+            .format(a=f"{float(prec_alpha):.0%}", q=prec_n_levels))
 
     # Preview in app
     st.caption(t("Journal-style precision table — days as rows, replicates as columns, "
                "precision summary in footer:"))
-    st.dataframe(_full_jdf.set_index("Day"), use_container_width=True)
+    st.dataframe(_tdf(_full_jdf.set_index("Day")), use_container_width=True)
 
     for _fn in _footnotes:
         st.caption(_fn)
@@ -1806,6 +1971,7 @@ comparison with sources that use the simplified approach.
         [_full_jdf, pd.DataFrame(_fn_rows, columns=_all_cols)],
         ignore_index=True
     ).set_index("Day")
+    _dl_df = _tdf(_dl_df)          # download follows the interface language
 
     st.download_button(
         t("📥 Download journal table (CSV)"),
@@ -1827,6 +1993,7 @@ comparison with sources that use the simplified approach.
             sample_id=_prlf_sample_id or "—",
             analyte=_prlf_analyte_sel or "—",
             decimals=prec_decimals,
+            t=t,
         )
         st.download_button(
             t("📊 Download Excel (raw data + summary)"),
