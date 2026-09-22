@@ -3,96 +3,217 @@ Data Loader — Long-format CSV matching and precision extraction
 CLSI EP15-A3 compatible; matches SampleID x Analyte across two files.
 """
 import io, numpy as np, pandas as pd
+from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 
-def load_long_format(raw_bytes: bytes, fname: str,
-                     has_header: bool = True) -> pd.DataFrame:
-    """
-    Read a long-format CSV/Excel file.
+from analysis.file_reader import (read_table, list_sheets, normalize_ids,
+                                  parse_numeric, suggest_analyte, guess_column,
+                                  canonical_analyte)
 
-    has_header=True  -> first row is column names (default).
-    has_header=False -> first row is DATA; columns are named
-                        "Column 1", "Column 2", ... so nothing is lost.
+
+class MultipleResultsError(ValueError):
+    """Flera resultat per prov-ID utan analyskolumn: parning vore gissning."""
+
+
+def load_long_format(raw_bytes: bytes, fname: str, has_header: bool = True,
+                     sheet=None, header_row="auto") -> pd.DataFrame:
     """
-    fname_lower = fname.lower()
-    _hdr = 0 if has_header else None
+    Läs en instrument- eller LIS-export. Alla celler läses som TEXT.
+    Kodning, avgränsare, rubrikrad och Excel-blad identifieras automatiskt;
+    hur filen tolkades finns i df.attrs["read_info"].
+
+    has_header=False -> ingen rubrikrad; kolumnerna heter "Column 1", ...
+    """
     try:
-        if fname_lower.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(io.BytesIO(raw_bytes), header=_hdr)
-        else:
-            try:
-                df = pd.read_csv(io.BytesIO(raw_bytes), sep=None, engine="python",
-                                 decimal=",", header=_hdr)
-                if df.select_dtypes(include=[np.number]).shape[1] == 0:
-                    raise ValueError
-            except Exception:
-                df = pd.read_csv(io.BytesIO(raw_bytes), sep=None, engine="python",
-                                 header=_hdr)
+        df, info = read_table(raw_bytes, fname, sheet=sheet,
+                              header_row=header_row if has_header else None)
     except Exception as e:
         raise ValueError(f"Could not read file: {e}")
-
-    if has_header:
-        df.columns = [str(c).strip() for c in df.columns]
-    else:
-        df.columns = [f"Column {i+1}" for i in range(len(df.columns))]
+    df.attrs["read_info"] = info
     return df
 
 
 def _coerce_numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.astype(str).str.replace(",", ".").str.strip(), errors="coerce")
+    """Bakåtkompatibel: tolka en kolumn till tal med kolumnvis decimaltecken."""
+    vals, _ = parse_numeric(series)
+    return vals["value"]
 
 
-def find_duplicates(df, id_col, analysis_col, result_col) -> pd.DataFrame:
-    counts = df.groupby([id_col, analysis_col])[result_col].transform("count")
+def _prepare(df, id_col, an_col, res_col, analyte, ignore_leading_zeros):
+    """Filtrera analys, normalisera ID, tolka resultat. Returnerar ren tabell."""
+    d = df
+    if an_col not in (None, "N/A") and analyte not in (None, "ALL"):
+        d = d[d[an_col].astype(str).str.strip() == str(analyte).strip()]
+    d = d.copy()
+    key, sci = normalize_ids(d[id_col], ignore_leading_zeros)
+    parsed, pinfo = parse_numeric(d[res_col])
+    out = pd.DataFrame({
+        "key": key.values, "id_orig": d[id_col].astype(str).values,
+        "raw": d[res_col].astype(str).values, "value": parsed["value"].values,
+        "qualifier": parsed["qualifier"].values, "flag": parsed["flag"].values,
+        "reason": parsed["reason"].values, "sci": sci.values,
+    })
+    info = {"parse": pinfo, "n_rows": len(out), "n_sci": int(sci.sum()),
+            "n_blank_id": int(((key == "") & ~sci).sum())}
+    out = out[(out["key"] != "")].reset_index(drop=True)
+    return out, info
+
+
+def find_duplicates(df, id_col, analysis_col, result_col, ignore_leading_zeros=True) -> pd.DataFrame:
+    """Rader där samma (normaliserade) prov-ID förekommer mer än en gång per analys."""
+    key, _ = normalize_ids(df[id_col], ignore_leading_zeros)
+    grp = [key] if analysis_col in (None, "N/A") else [key, df[analysis_col].astype(str)]
+    counts = df.groupby(grp)[result_col].transform("count")
     dups = df[counts > 1].copy()
     if not dups.empty:
-        dups["_occurrence"] = dups.groupby([id_col, analysis_col]).cumcount() + 1
+        dups["_occurrence"] = dups.groupby(grp[: len(grp)]).cumcount() + 1
     return dups
 
 
-def resolve_duplicates(df, id_col, analysis_col, result_col, strategy="first") -> pd.DataFrame:
-    if strategy == "last":
-        return df.drop_duplicates(subset=[id_col, analysis_col], keep="last")
-    elif strategy == "mean":
-        df = df.copy()
-        df[result_col] = _coerce_numeric(df[result_col])
-        return df.groupby([id_col, analysis_col], as_index=False)[result_col].mean()
+DUP_STRATEGIES = ("first_valid", "last_valid", "mean", "first", "last")
+
+
+def _dedupe(t: pd.DataFrame, strategy: str) -> Tuple[pd.DataFrame, int]:
+    """Välj ett resultat per nyckel. Returnerar (tabell, antal borttagna rader)."""
+    n0 = len(t)
+    if not t["key"].duplicated().any():
+        return t, 0
+    t = t.reset_index(drop=True)
+    t["_ok"] = np.isfinite(t["value"].astype(float))
+    if strategy == "mean":
+        agg = t.groupby("key", sort=False).agg(
+            id_orig=("id_orig", "first"), value=("value", "mean"),
+            raw=("raw", lambda r: " | ".join(r)), qualifier=("qualifier", "first"),
+            flag=("flag", "first"), sci=("sci", "first"),
+            reason=("reason", lambda r: "" if (r == "").any() else r.iloc[0]))
+        return agg.reset_index(), n0 - len(agg)
+    if strategy in ("first_valid", "last_valid"):
+        t = t.sort_values(["key", "_ok"], ascending=[True, False], kind="stable") \
+            if strategy == "first_valid" else t
+        if strategy == "last_valid":
+            t = t.iloc[::-1].sort_values(["key", "_ok"], ascending=[True, False], kind="stable")
+        out = t.drop_duplicates("key", keep="first")
     else:
-        return df.drop_duplicates(subset=[id_col, analysis_col], keep="first")
+        out = t.drop_duplicates("key", keep="last" if strategy == "last" else "first")
+    return out.drop(columns="_ok"), n0 - len(out)
 
 
 def get_common_analytes(df_a, df_b, analysis_col_a, analysis_col_b) -> List[str]:
-    set_a = set(df_a[analysis_col_a].dropna().astype(str).unique())
-    set_b = set(df_b[analysis_col_b].dropna().astype(str).unique())
+    set_a = set(df_a[analysis_col_a].dropna().astype(str).str.strip().unique())
+    set_b = set(df_b[analysis_col_b].dropna().astype(str).str.strip().unique())
     return sorted(set_a & set_b)
 
 
+def list_analytes(df, analysis_col) -> List[str]:
+    return sorted(v for v in df[analysis_col].dropna().astype(str).str.strip().unique() if v)
+
+
+_REASON_TXT = {"below": "below measuring range", "above": "above measuring range",
+               "text": "text result", "empty": "no result"}
+
+
 def match_two_files(df_a, df_b, id_col_a, id_col_b, analysis_col_a, analysis_col_b,
-                    result_col_a, result_col_b, selected_analyte,
-                    label_a="Method A", label_b="Method B"):
-    if selected_analyte != "ALL":
-        df_a = df_a[df_a[analysis_col_a].astype(str) == selected_analyte].copy()
-        df_b = df_b[df_b[analysis_col_b].astype(str) == selected_analyte].copy()
+                    result_col_a, result_col_b, analyte_a, analyte_b=None,
+                    label_a="Method A", label_b="Method B",
+                    ignore_leading_zeros=True, dup_strategy="first_valid",
+                    single_analyte=False):
+    """
+    Matcha två filer på normaliserat prov-ID för analys analyte_a (fil A)
+    och analyte_b (fil B; samma namn som A om None).
 
-    df_a = df_a.copy(); df_b = df_b.copy()
-    df_a[result_col_a] = _coerce_numeric(df_a[result_col_a])
-    df_b[result_col_b] = _coerce_numeric(df_b[result_col_b])
+    Om analyskolumn saknas ("N/A") och något prov-ID förekommer flera gånger
+    stoppas matchningen med MultipleResultsError, eftersom det inte går att
+    avgöra vilka resultat som hör ihop — utom om användaren intygat att filen
+    bara innehåller en analys (single_analyte=True); då behandlas upprepningar
+    som omkörningar och löses med dup_strategy.
 
-    slim_a = df_a[[id_col_a, analysis_col_a, result_col_a]].rename(
-        columns={id_col_a:"SampleID", analysis_col_a:"Analyte", result_col_a:label_a})
-    slim_b = df_b[[id_col_b, analysis_col_b, result_col_b]].rename(
-        columns={id_col_b:"SampleID", analysis_col_b:"Analyte", result_col_b:label_b})
+    Returnerar (x, y, rapport, sammanfattning).
+    """
+    if analyte_b is None:
+        analyte_b = analyte_a
+    A, ia = _prepare(df_a, id_col_a, analysis_col_a, result_col_a, analyte_a, ignore_leading_zeros)
+    B, ib = _prepare(df_b, id_col_b, analysis_col_b, result_col_b, analyte_b, ignore_leading_zeros)
 
-    merged = pd.merge(slim_a, slim_b, on=["SampleID","Analyte"], how="outer", indicator=True)
-    merged["Match"] = merged["_merge"].map({"both":"Matched","left_only":"Only in A","right_only":"Only in B"})
-    merged = merged.drop(columns=["_merge"])
+    for T_, col, nm in ((A, analysis_col_a, "A"), (B, analysis_col_b, "B")):
+        if col in (None, "N/A") and not single_analyte and T_["key"].duplicated().any():
+            n = int(T_["key"].duplicated(keep=False).sum())
+            raise MultipleResultsError(
+                f"File {nm}: {n} rows share a sample ID but no analysis column is "
+                "selected, so results cannot be paired safely.")
 
-    matched = merged[merged["Match"] == "Matched"].copy()
-    x_arr = matched[label_a].values.astype(float)
-    y_arr = matched[label_b].values.astype(float)
-    valid = np.isfinite(x_arr) & np.isfinite(y_arr)
-    return x_arr[valid], y_arr[valid], merged
+    A, dup_a = _dedupe(A, dup_strategy)
+    B, dup_b = _dedupe(B, dup_strategy)
+
+    m = pd.merge(A, B, on="key", how="outer", suffixes=("_a", "_b"), indicator=True)
+    m["Match"] = m["_merge"].map({"both": "Matched", "left_only": "Only in A",
+                                  "right_only": "Only in B"}).astype(str)
+
+    def _why(r):
+        why = []
+        for side, lab in (("a", "A"), ("b", "B")):
+            rs = r.get(f"reason_{side}")
+            if isinstance(rs, str) and rs:
+                raw = r.get(f"raw_{side}", "")
+                why.append(f"{lab}: {_REASON_TXT.get(rs, rs)} ({raw})" if raw else
+                           f"{lab}: {_REASON_TXT.get(rs, rs)}")
+        return "; ".join(why)
+
+    an_lbl = analyte_a if analyte_a == analyte_b else f"{analyte_a} ↔ {analyte_b}"
+    rep = pd.DataFrame({
+        "SampleID": m["id_orig_a"].where(m["id_orig_a"].notna(), m["id_orig_b"]).astype(str).str.strip(),
+        "Analyte": an_lbl,
+        label_a: m["value_a"].astype(float),
+        label_b: m["value_b"].astype(float),
+        "Original A": m["raw_a"].fillna(""),
+        "Original B": m["raw_b"].fillna(""),
+        "Match": m["Match"],
+    })
+    rep["Note"] = [(_why(r) if r["Match"] == "Matched" else "") for _, r in m.iterrows()]
+    flags = []
+    for _, r in m.iterrows():
+        f = [f"{s.upper()}: {r[f'flag_{s}']}" for s in ("a", "b")
+             if isinstance(r.get(f"flag_{s}"), str) and r.get(f"flag_{s}")]
+        flags.append("; ".join(f))
+    rep["Flags"] = flags
+    rep = rep.sort_values(["Match", "SampleID"], kind="stable").reset_index(drop=True)
+
+    matched = rep[rep["Match"] == "Matched"]
+    xa = matched[label_a].values.astype(float); yb = matched[label_b].values.astype(float)
+    ok = np.isfinite(xa) & np.isfinite(yb)
+
+    excl = Counter()
+    for _, r in m[m["Match"] == "Matched"].iterrows():
+        for side, lab in (("a", "A"), ("b", "B")):
+            rs = r[f"reason_{side}"]
+            if isinstance(rs, str) and rs:
+                excl[f"{lab}: {_REASON_TXT.get(rs, rs)}"] += 1
+
+    summary = {
+        "matched_ids": int(len(matched)), "used": int(ok.sum()),
+        "excluded": int((~ok).sum()), "excluded_reasons": dict(excl),
+        "only_a": int((rep["Match"] == "Only in A").sum()),
+        "only_b": int((rep["Match"] == "Only in B").sum()),
+        "dup_removed_a": dup_a, "dup_removed_b": dup_b,
+        "sci_ids_a": ia["n_sci"], "sci_ids_b": ib["n_sci"],
+        "blank_ids_a": ia["n_blank_id"], "blank_ids_b": ib["n_blank_id"],
+        "parse_a": ia["parse"], "parse_b": ib["parse"],
+        "analyte_a": analyte_a, "analyte_b": analyte_b,
+    }
+    return xa[ok], yb[ok], rep, summary
+
+
+def _to_datetime(series: pd.Series) -> pd.Series:
+    """Tolka datum/tid i vanliga exportformat; NaT där det inte går."""
+    s = series.astype(str).str.strip()
+    for kw in ({"format": "ISO8601"}, {"dayfirst": False}, {"dayfirst": True}):
+        try:
+            out = pd.to_datetime(s, errors="coerce", **kw)
+            if out.notna().all():
+                return out
+        except (ValueError, TypeError):
+            continue
+    return pd.to_datetime(s, errors="coerce")
 
 
 def extract_precision_replicates(df, id_col, result_col, sample_id,
@@ -106,7 +227,8 @@ def extract_precision_replicates(df, id_col, result_col, sample_id,
                 number of replicates per day may vary between analytes.
                 When None, rows are sliced every `n_per_day` in sort order.
     """
-    mask = df[id_col].astype(str).str.strip() == str(sample_id).strip()
+    _k, _ = normalize_ids(df[id_col]); _t, _ = normalize_ids(pd.Series([sample_id]))
+    mask = (_k == _t.iloc[0]).values
     sub = df[mask].copy()
     if analysis_col and analyte and analyte not in ("ALL", "", None):
         sub = sub[sub[analysis_col].astype(str).str.strip() == str(analyte).strip()]
@@ -114,7 +236,9 @@ def extract_precision_replicates(df, id_col, result_col, sample_id,
         raise ValueError(f"No rows found for SampleID = '{sample_id}'.")
     if sort_col and sort_col in sub.columns:
         try:
-            sub[sort_col] = pd.to_datetime(sub[sort_col], infer_datetime_format=True)
+            _dt = _to_datetime(sub[sort_col])
+            if _dt.notna().all():
+                sub[sort_col] = _dt
         except Exception:
             pass
         sub = sub.sort_values(sort_col)
@@ -124,6 +248,10 @@ def extract_precision_replicates(df, id_col, result_col, sample_id,
     # ── Group by a real day/date column ──────────────────────────────────────
     if group_col is not None and group_col in sub.columns:
         _keys = sub[group_col]
+        if not pd.api.types.is_datetime64_any_dtype(_keys):
+            _dt = _to_datetime(_keys)                 # '2026-09-15 06:12' -> datum
+            if _dt.notna().all():
+                _keys = _dt
         if pd.api.types.is_datetime64_any_dtype(_keys):
             _keys = _keys.dt.date
         sub = sub.copy()
@@ -140,14 +268,22 @@ def extract_precision_replicates(df, id_col, result_col, sample_id,
                 "need at least 2 days.")
         if min(counts) < 2:
             raise ValueError("Each day needs at least 2 replicates.")
+        n_trim = 0
+        sub["Used"] = True
         if min(counts) != max(counts):
-            # Balance the design by truncating to the smallest day
+            # EP15-beräkningen kräver lika många replikat per dag. Varje dag
+            # begränsas till de m första resultaten (i tidsordning); resten
+            # markeras och RAPPORTERAS, i stället för att tyst försvinna.
             m = min(counts)
             data_dict = {k: v[:m] for k, v in data_dict.items()}
+            for k in _order:
+                idx = sub.index[sub["_daykey"] == k]
+                sub.loc[idx[m:], "Used"] = False
+            n_trim = int(sum(counts) - m * len(counts))
         sub["Day"] = sub["_daykey"].map(
             {k: f"Day {i}" for i, k in enumerate(_order, start=1)})
         sub = sub.drop(columns=["_daykey"])
-        return data_dict, sub, 0
+        return data_dict, sub, n_trim
 
     # ── Otherwise: slice every n_per_day rows in sort order ──────────────────
     if len(sub) < n_per_day:
@@ -199,8 +335,11 @@ def build_matched_excel(report_df, label_a="Method A", label_b="Method B", analy
             row_fill, row_font = fill, None
             if status_i is not None:
                 val = ws.cell(row=ri, column=status_i).value
-                if str(val).strip().lower() == "excluded":
+                v_ = str(val).strip().lower()
+                if v_ == "excluded":
                     row_fill, row_font = RED, RED_FONT
+                elif v_.startswith("not used"):
+                    row_fill, row_font = YELLOW, None
                 else:
                     row_fill, row_font = GREEN, GREEN_FONT
 
@@ -224,7 +363,10 @@ def build_matched_excel(report_df, label_a="Method A", label_b="Method B", analy
     buf = io.BytesIO(); wb.save(buf); buf.seek(0); return buf.read()
 
 
-def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) -> bytes:
+def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4,
+                          t=None) -> bytes:
+    if t is None:
+        t = lambda x: x
     import openpyxl
     from openpyxl.styles import PatternFill, Font, Alignment
     from openpyxl.utils.dataframe import dataframe_to_rows
@@ -236,7 +378,7 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
     def _f(v): return f"{v:.{decimals}f}".replace(".",",")
 
     wb = openpyxl.Workbook()
-    ws1 = wb.active; ws1.title = "Raw replicates"
+    ws1 = wb.active; ws1.title = t("Raw replicates")[:31]
     for ri, row in enumerate(dataframe_to_rows(raw_df, index=False, header=True), 1):
         ws1.append(row)
         for cell in ws1[ri]:
@@ -248,7 +390,7 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
     # ── Sheet 2: sammanfattning i laboratoriets tabellformat ─────────────
     from openpyxl.styles import Border, Side
 
-    ws2 = wb.create_sheet("Sammanfattning")
+    ws2 = wb.create_sheet(t("Summary")[:31])
 
     HDR_BG   = PatternFill("solid", fgColor="000000")   # svart rubrikrad
     LBL_BG   = PatternFill("solid", fgColor="DCE6F1")   # ljusbla etiketter
@@ -265,18 +407,18 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
     def _pct(v):
         return f"{v:.1f}".replace(".", ",") + "%"
 
-    title_left  = analyte  or "Analys"
-    title_right = sample_id or "Kontroll"
+    title_left  = analyte  or t("Analysis")
+    title_right = sample_id or t("Control")
 
     rows = [
-        ("Antal:",                    str(pr_results["n_total_meas"]),      False),
-        ("MV:",                       _f(pr_results["grand_mean"]),         False),
+        (t("Count:"),                 str(pr_results["n_total_meas"]),      False),
+        (t("Mean:"),                  _f(pr_results["grand_mean"]),         False),
         ("SD:",                       _f(pr_results.get("pooled_sd", 0.0)), False),
         ("CV%:",                      _pct(pr_results.get("pooled_cv", 0.0)), False),
         ("Min:",                      _f(pr_results.get("overall_min", 0.0)), False),
         ("Max:",                      _f(pr_results.get("overall_max", 0.0)), False),
-        ("Inomserieprecision CV%:",   _pct(pr_results["cv_r"]),             True),
-        ("Totalimprecision CV%:",     _pct(pr_results["cv_l"]),             True),
+        (t("Within-run precision CV%:"), _pct(pr_results["cv_r"]),             True),
+        (t("Total imprecision CV%:"),  _pct(pr_results["cv_l"]),             True),
     ]
 
     # Rubrikrad
@@ -312,10 +454,10 @@ def build_precision_excel(raw_df, pr_results, sample_id, analyte, decimals=4) ->
     except Exception:
         _v = ""
     notes = [
-        f"Uppläggning: {pr_results['D']} dagar x {pr_results['n']} replikat "
-        f"({pr_results['n_total_meas']} matningar)",
-        "SD och CV% avser samtliga matningar sammanslagna.",
-        "Inomserieprecision och totalimprecision enligt CLSI EP15-A3.",
+        t("Design: {D} days x {n} replicates ({N} measurements)")
+        .format(D=pr_results['D'], n=pr_results['n'], N=pr_results['n_total_meas']),
+        t("SD and CV% refer to all measurements pooled."),
+        t("Within-run precision and total imprecision according to CLSI EP15-A3."),
         _v,
     ]
     for k, txt in enumerate(notes):

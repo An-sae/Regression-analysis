@@ -87,7 +87,7 @@ def fourfold(
     tp, fp, fn, tn = int(tp), int(fp), int(fn), int(tn)
     n = tp + fp + fn + tn
     if n == 0:
-        raise ValueError("Tabellen är tom.")
+        raise ValueError("The table is empty.")
 
     n_ref_pos = tp + fn          # antal positiva enligt referens/jämförelse
     n_ref_neg = fp + tn
@@ -147,17 +147,17 @@ def fourfold(
     # Endast de diskordanta cellerna bär information.
     b, c = fp, fn
     if b + c == 0:
-        out.update({"mcnemar_p": 1.0, "mcnemar_metod": "inga diskordanta par",
+        out.update({"mcnemar_p": 1.0, "mcnemar_metod": "no discordant pairs",
                     "mcnemar_stat": 0.0})
     elif b + c < 25:
         # Exakt binomialtest rekommenderas vid få diskordanta par
         p = binomtest(b, b + c, 0.5).pvalue
-        out.update({"mcnemar_p": float(p), "mcnemar_metod": "exakt binomialtest",
+        out.update({"mcnemar_p": float(p), "mcnemar_metod": "exact binomial test",
                     "mcnemar_stat": float(b)})
     else:
         stat = (abs(b - c) - 1) ** 2 / (b + c)     # kontinuitetskorrigerad
         out.update({"mcnemar_p": float(1 - chi2.cdf(stat, 1)),
-                    "mcnemar_metod": "chi-två med kontinuitetskorrektion",
+                    "mcnemar_metod": "chi-square with continuity correction",
                     "mcnemar_stat": float(stat)})
 
     return out
@@ -166,13 +166,13 @@ def fourfold(
 def _kappa_label(k: float) -> str:
     """Landis & Koch 1977, med brasklapp: gränserna är godtyckliga."""
     if not np.isfinite(k):
-        return "kan ej beräknas"
-    if k < 0.00: return "sämre än slumpen"
-    if k < 0.21: return "obetydlig"
-    if k < 0.41: return "svag"
-    if k < 0.61: return "måttlig"
-    if k < 0.81: return "god"
-    return "mycket god"
+        return "cannot be calculated"
+    if k < 0.00: return "worse than chance"
+    if k < 0.21: return "slight"
+    if k < 0.41: return "fair"
+    if k < 0.61: return "moderate"
+    if k < 0.81: return "substantial"
+    return "almost perfect"
 
 
 # ── Bygg tabellen från data ──────────────────────────────────────────────────
@@ -194,7 +194,7 @@ def fourfold_from_arrays(
     ref = np.asarray(ref)
     cand = np.asarray(cand)
     if len(ref) != len(cand):
-        raise ValueError("Metoderna har olika antal värden.")
+        raise ValueError("The methods have different numbers of values.")
 
     def _binarise(a, cutoff):
         if cutoff is not None:
@@ -223,35 +223,39 @@ def fourfold_from_arrays(
 
 # ── Krav på studieupplägg ────────────────────────────────────────────────────
 
-def check_prerequisites(res: Dict) -> list:
+def check_prerequisites(res: Dict, t=None) -> list:
     """
-    Returnerar en lista med varningar om studieupplägget är otillräckligt.
-    Baserat på CLSI EP12-A2 och FDA:s vägledning.
+    Warnings when the study design is insufficient (CLSI EP12-A2, FDA).
+    Text is English source; pass the app's translator as t for other
+    languages.
     """
+    if t is None:
+        t = lambda x: x
     w = []
     n = res["n"]
     if n < 40:
-        w.append(f"Endast {n} prov. CLSI EP12 rekommenderar minst 50 prov, "
-                 "helst 100–200 vid verifiering.")
+        w.append(t("Only {n} samples. CLSI EP12 recommends at least 50 samples, "
+                   "preferably 100–200 for verification.").format(n=n))
     if res["n_ref_pos"] < 10:
-        w.append(f"Endast {res['n_ref_pos']} positiva prov. Konfidensintervallet "
-                 "för PPA/sensitivitet blir mycket brett.")
+        w.append(t("Only {n} positive samples. The confidence interval for "
+                   "PPA/sensitivity will be very wide.").format(n=res["n_ref_pos"]))
     if res["n_ref_neg"] < 10:
-        w.append(f"Endast {res['n_ref_neg']} negativa prov. Konfidensintervallet "
-                 "för NPA/specificitet blir mycket brett.")
+        w.append(t("Only {n} negative samples. The confidence interval for "
+                   "NPA/specificity will be very wide.").format(n=res["n_ref_neg"]))
     lo, hi = res["ppa_ci"]
     if np.isfinite(hi - lo) and (hi - lo) > 20:
-        w.append(f"Konfidensintervallet för PPA spänner {hi-lo:.0f} "
-                 "procentenheter. Fler positiva prov behövs för en säker "
-                 "skattning.")
+        w.append(t("The confidence interval for PPA spans {w} percentage "
+                   "points. More positive samples are needed for a reliable "
+                   "estimate.").format(w=f"{hi-lo:.0f}"))
     lo, hi = res["npa_ci"]
     if np.isfinite(hi - lo) and (hi - lo) > 20:
-        w.append(f"Konfidensintervallet för NPA spänner {hi-lo:.0f} "
-                 "procentenheter. Fler negativa prov behövs.")
+        w.append(t("The confidence interval for NPA spans {w} percentage "
+                   "points. More negative samples are needed.").format(w=f"{hi-lo:.0f}"))
     if res["mode"] == "reference":
         p = res.get("prevalence", float("nan"))
         if np.isfinite(p) and not (20 <= p <= 80):
-            w.append(f"Andelen positiva i materialet är {p:.0f} %. Prediktiva "
-                     "värden gäller endast vid denna prevalens och ska inte "
-                     "överföras till en klinisk population med annan prevalens.")
+            w.append(t("The proportion of positives in the material is {p} %. "
+                       "Predictive values apply only at this prevalence and "
+                       "must not be transferred to a clinical population with "
+                       "a different prevalence.").format(p=f"{p:.0f}"))
     return w

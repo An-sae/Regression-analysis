@@ -121,7 +121,7 @@ def build_fourfold_excel(res: Dict, ref_name="Reference method",
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Fyrfältstabell"
+    ws.title = t("Fourfold table")[:31]
     n = res["n"]
     ref_mode = res["mode"] == "reference"
 
@@ -236,10 +236,10 @@ def build_fourfold_excel(res: Dict, ref_name="Reference method",
 
     rows += [
         (t("Cohen's kappa"), _f(res["kappa"], 3), _ci(res["kappa_ci"], 3),
-         res["kappa_tolkning"]),
+         t(res["kappa_tolkning"])),
         (t("McNemar test (p-value)"),
          ("< 0,001" if res["mcnemar_p"] < 0.001 else _f(res["mcnemar_p"], 3)),
-         res["mcnemar_metod"],
+         t(res["mcnemar_metod"]),
          t("systematic difference") if res["mcnemar_p"] < 0.05 else t("none detected")),
     ]
 
@@ -270,20 +270,20 @@ def build_fourfold_excel(res: Dict, ref_name="Reference method",
     # ── Fotnot ───────────────────────────────────────────────────────────────
     notes = []
     if ref_mode:
-        notes.append("Sensitivitet och specificitet förutsätter att "
-                     "referensmetoden utgör facit för sant tillstånd.")
-        notes.append("Prediktiva värden gäller endast vid prevalensen i detta "
-                     "material och kan inte överföras till en population med "
-                     "annan prevalens.")
+        notes.append(t("Sensitivity and specificity assume that the reference "
+                       "method is the gold standard for the true condition."))
+        notes.append(t("Predictive values apply only at the prevalence in this "
+                       "material and cannot be transferred to a population "
+                       "with a different prevalence."))
     else:
-        notes.append("Ingen av metoderna antas utgöra facit. Därför redovisas "
-                     "procentuell överensstämmelse och inte sensitivitet och "
-                     "specificitet (CLSI EP12-A2, FDA 2007).")
+        notes.append(t("Neither method is assumed to be a gold standard. "
+                       "Percent agreement is therefore reported rather than "
+                       "sensitivity and specificity (CLSI EP12-A2, FDA 2007)."))
     notes += [
-        "Konfidensintervall beräknade med Wilsons score-metod.",
-        "McNemars test prövar om metoderna skiljer sig systematiskt åt; "
-        "endast diskordanta par bidrar.",
-        "Cohens kappa beskriver överensstämmelse korrigerad för slumpen.",
+        t("Confidence intervals calculated with the Wilson score method."),
+        t("McNemar's test assesses whether the methods differ systematically; "
+          "only discordant pairs contribute."),
+        t("Cohen's kappa describes agreement corrected for chance."),
     ]
     try:
         import sys as _s, os as _o
