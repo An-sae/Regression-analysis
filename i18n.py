@@ -769,4 +769,6 @@ SV = {
     '🗑 Excluded points ({n})': '🗑 Uteslutna punkter ({n})',
     'These files differ from validated version {v}: {f}. Results are not covered by the validation until it is repeated.':
         'Dessa filer skiljer sig från validerad version {v}: {f}. Resultaten omfattas inte av valideringen förrän den upprepats.',
+    'The settings file .streamlit/config.toml is missing. Calculations are not affected, but default settings apply: 200 MB upload limit, and usage statistics are sent to Streamlit.':
+        'Inställningsfilen .streamlit/config.toml saknas. Beräkningarna påverkas inte, men standardinställningar gäller: uppladdningsgräns 200 MB, och användningsstatistik skickas till Streamlit.',
 }

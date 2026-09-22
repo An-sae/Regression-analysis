@@ -2,9 +2,9 @@
  "version": "2.1.0",
  "validated_on": "2026-09-22",
  "required": {
-  "app.py": "7f7b5b79352f70fbed9fb66f1d3fba40ce948f67fcfb5e8f1e6f5362187be7dd",
+  "app.py": "b88570df3023df2da51a7cf2ca35e23805648c8a27c1b3397878dc0605e92917",
   "version.py": "83826c3c97f55fc4560cddc9d6e2d91dc4e416aee1683cce7594c06aaa6d77ab",
-  "i18n.py": "3a7f2a764f934689e3e4d4702b7f5cab144ee195e114fd27beeb3f9f1e6751de",
+  "i18n.py": "535f6e334a80e2814bde4d542b8efa8fd48e318e6777bf27ffb93e2962b38a3d",
   "requirements.txt": "3c96dd41f49104f2cc489716dcb99560ad5cd2d1b8ecb4e905e0f1037da5e016",
   "analysis/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "analysis/regression.py": "d153a6165f16c9bea3b5933da61056d92c9e0772f0bb570b94ee3c04fd2d1f14",

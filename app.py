@@ -20,7 +20,7 @@ def _installation_check():
     try:
         man = json.load(open(os.path.join(here, "manifest.json"), encoding="utf-8"))
     except Exception:
-        return [], [], None
+        return [], [], None, []
     missing, changed = [], []
     for rel, digest in man.get("required", {}).items():
         p = os.path.join(here, rel)
@@ -28,12 +28,11 @@ def _installation_check():
             missing.append(rel)
         elif hashlib.sha256(open(p, "rb").read()).hexdigest() != digest:
             changed.append(rel)
-    for rel in man.get("recommended", {}):
-        if not os.path.exists(os.path.join(here, rel)):
-            changed.append(rel + " (saknas / missing)")
-    return missing, changed, man.get("version")
+    settings_missing = [rel for rel in man.get("recommended", {})
+                        if not os.path.exists(os.path.join(here, rel))]
+    return missing, changed, man.get("version"), settings_missing
 
-_inst_missing, _inst_changed, _inst_version = _installation_check()
+_inst_missing, _inst_changed, _inst_version, _inst_settings = _installation_check()
 if _inst_missing:
     st.set_page_config(page_title="Method Comparison Tool")
     st.error(
@@ -338,6 +337,10 @@ with st.sidebar:
         st.warning(t("These files differ from validated version {v}: {f}. Results "
                      "are not covered by the validation until it is repeated.")
                    .format(v=_inst_version, f=", ".join(_inst_changed)))
+    if _inst_settings:
+        st.info(t("The settings file .streamlit/config.toml is missing. Calculations are "
+                  "not affected, but default settings apply: 200 MB upload limit, and "
+                  "usage statistics are sent to Streamlit."))
 
     # ══ STEP 1 ═════════════════════════════════════════════════════════════
     _step(1, "Choose your analysis")
