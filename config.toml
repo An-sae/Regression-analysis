@@ -1,24 +1,34 @@
-# Method Comparison Tool — konfiguration
-#
-# Denna fil fungerar BADE lokalt och pa Streamlit Cloud.
-#
-# Notera: server.address star medvetet INTE har. Pa Streamlit Cloud
-# maste appen lyssna pa alla granssnitt inuti containern, annars nas
-# den inte. Lokalt lases den till localhost av STARTA.bat i stallet,
-# via flaggan --server.address=localhost.
+"""
+Skapa manifest.json: kontrollsumma (SHA-256) för varje fil programmet behöver.
 
-[server]
-port = 8501
-headless = true
-enableXsrfProtection = true
-enableCORS = true
-maxUploadSize = 50
+Körs vid paketering. Programmet jämför vid start sina filer mot manifestet
+och talar om exakt vilka filer som saknas, ligger fel eller skiljer sig
+från den validerade versionen.
+"""
+import hashlib, json, os
+from version import VERSION, VALIDATED_ON
 
-[browser]
-gatherUsageStats = false
+HERE = os.path.dirname(os.path.abspath(__file__))
+REQUIRED = [
+    "app.py", "version.py", "i18n.py", "requirements.txt",
+    "analysis/__init__.py", "analysis/regression.py", "analysis/deming.py",
+    "analysis/statistics.py", "analysis/confusion.py", "analysis/precision.py",
+    "analysis/export.py", "analysis/data_loader.py", "analysis/file_reader.py",
+    "analysis/fourfold.py", "analysis/overview.py",
+    "ui/__init__.py", "ui/two_file.py",
+    "plots/__init__.py", "plots/regression_plot.py", "plots/confusion_plot.py",
+    "plots/mpl_export.py", "plots/fourfold_plot.py",
+]
+RECOMMENDED = [".streamlit/config.toml"]
 
-[client]
-showErrorDetails = true
 
-[theme]
-base = "light"
+def sha(path):
+    return hashlib.sha256(open(os.path.join(HERE, path), "rb").read()).hexdigest()
+
+
+if __name__ == "__main__":
+    m = {"version": VERSION, "validated_on": VALIDATED_ON,
+         "required": {p: sha(p) for p in REQUIRED},
+         "recommended": {p: sha(p) for p in RECOMMENDED if os.path.exists(os.path.join(HERE, p))}}
+    json.dump(m, open(os.path.join(HERE, "manifest.json"), "w"), indent=1)
+    print(f"manifest.json skriven för version {VERSION}: {len(m['required'])} obligatoriska filer")

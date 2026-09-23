@@ -1,126 +1,53 @@
-"""
-Unit Tests — Passing–Bablok Regression Tool
-=============================================
-Run with:  python -m pytest tests/ -v
-"""
+"""Installationskontroll: fem sätt en uppladdning kan gå fel, renderat i appen."""
+import os, shutil, sys, warnings, tempfile
+warnings.filterwarnings("ignore")
+from streamlit.testing.v1 import AppTest
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRC = os.path.abspath(os.path.join(HERE, "..", ".."))
+_VERSION = open(os.path.join(SRC, "version.py"), encoding="utf-8").read().split('VERSION = "')[1].split('"')[0]
+def scenario(name, mutate):
+    d = tempfile.mkdtemp(); root = os.path.join(d, "app")
+    shutil.copytree(SRC, root, ignore=shutil.ignore_patterns("tests", "__pycache__", "*.docx", ".pytest_cache"))
+    mutate(root)
+    cwd = os.getcwd(); os.chdir(root); sys.path.insert(0, root)
+    for m in [m for m in list(sys.modules) if m.split(".")[0] in ("analysis","plots","version","i18n")]:
+        del sys.modules[m]
+    at = AppTest.from_file(os.path.join(root, "app.py"), default_timeout=120); at.run()
+    os.chdir(cwd); sys.path.remove(root)
+    msgs = [e.value for e in at.error] + [w.value for w in at.warning]
+    infos = [i.value for i in at.info]
+    scenario.infos = infos
+    stat = [x for x in at.expander if "Systemstatus" in (x.label or "")]
+    scenario.status = [c.value for c in stat[0].caption] if stat else None
+    exc = [str(e.value)[:80] for e in at.exception]
+    return msgs, exc, len(at.selectbox) > 0
+fails = 0
+def check(name, ok, detail=""):
+    global fails; fails += not ok
+    print(f"  {'OK ' if ok else 'FEL'} {name}" + (f"  — {detail}" if not ok else ""))
 
-import numpy as np
-import pytest
-import sys
-import os
+print("1) Komplett installation")
+m, e, ui = scenario("komplett", lambda r: None)
+check("appen startar, inga fel, ingen varning", ui and not e and not m, (m, e))
+check("systemstatus visar ✓ validerad version", scenario.status and any("✓" in x and _VERSION in x for x in scenario.status), scenario.status)
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+print("2) file_reader.py uppladdad i huvudmappen i stället för analysis/")
+m, e, ui = scenario("fel mapp", lambda r: shutil.move(f"{r}/analysis/file_reader.py", f"{r}/file_reader.py"))
+check("tydligt stopp som namnger analysis/file_reader.py",
+      any("analysis/file_reader.py" in x and "ofullständig" in x for x in m) and not e, (m[:1], e))
 
-from analysis.regression import passing_bablok
-from analysis.statistics import r_squared, pearson_r, summary_stats
+print("3) Delvis uppdatering: gammal data_loader.py (v2.0.0) kvar i GitHub")
+m, e, ui = scenario("gammal fil", lambda r: shutil.copy(os.path.join(HERE, "data_loader_v200.py"), f"{r}/analysis/data_loader.py"))
+check("tydligt besked som namnger analysis/data_loader.py, ingen krasch",
+      any("analysis/data_loader.py" in x and "passar inte ihop" in x for x in m) and not e, (m[:1], e))
 
+print("4) .streamlit/config.toml saknas (dold mapp ej uppladdad)")
+m, e, ui = scenario("config saknas", lambda r: os.remove(f"{r}/.streamlit/config.toml"))
+m_info = m
+check("ingen banner för slutanvändaren", ui and not e and not any("config.toml" in x for x in m + scenario.infos), (m, scenario.infos))
+check("uppgiften finns i den hopfällda Systemstatus-panelen", scenario.status and any("config.toml" in x and "påverkas inte" in x for x in scenario.status), scenario.status)
 
-# ── Regression tests ──────────────────────────────────────────────────────────
-
-class TestPassingBablok:
-
-    def test_perfect_identity(self):
-        """y = x  →  slope=1, intercept=0."""
-        rng = np.random.default_rng(42)
-        x = rng.uniform(1, 100, 50)
-        y = x.copy()
-        res = passing_bablok(x, y)
-        assert abs(res["slope"] - 1.0) < 1e-6
-        assert abs(res["intercept"] - 0.0) < 1e-6
-
-    def test_known_slope_intercept(self):
-        """y = 2x + 5  →  slope≈2, intercept≈5."""
-        x = np.arange(1, 51, dtype=float)
-        y = 2.0 * x + 5.0
-        res = passing_bablok(x, y)
-        assert abs(res["slope"] - 2.0) < 1e-4
-        assert abs(res["intercept"] - 5.0) < 1e-4
-
-    def test_nan_handling(self):
-        """NaN values are silently removed; result is still finite."""
-        x = np.array([1, 2, np.nan, 4, 5, 6, 7, 8, 9, 10], dtype=float)
-        y = np.array([2, 4, 6, np.nan, 10, 12, 14, 16, 18, 20], dtype=float)
-        res = passing_bablok(x, y)
-        assert res["n_excluded"] == 2
-        assert np.isfinite(res["slope"])
-        assert np.isfinite(res["intercept"])
-
-    def test_duplicate_x_values(self):
-        """Duplicate x values (undefined slopes) must not crash."""
-        x = np.array([1, 1, 2, 3, 4, 5, 5, 6, 7, 8], dtype=float)
-        y = np.array([2, 2.1, 4, 6, 8, 10, 10.1, 12, 14, 16], dtype=float)
-        res = passing_bablok(x, y)
-        assert np.isfinite(res["slope"])
-        assert np.isfinite(res["intercept"])
-
-    def test_ci_bounds_ordered(self):
-        """CI lower must be ≤ estimate ≤ CI upper."""
-        rng = np.random.default_rng(0)
-        x = rng.uniform(0, 100, 40)
-        y = 1.5 * x + 3.0 + rng.normal(0, 2, 40)
-        res = passing_bablok(x, y)
-        assert res["slope_lower"] <= res["slope"] <= res["slope_upper"]
-        assert res["intercept_lower"] <= res["intercept"] <= res["intercept_upper"]
-
-    def test_n_too_small_raises(self):
-        """Fewer than 3 valid points should raise ValueError."""
-        with pytest.raises(ValueError):
-            passing_bablok([1.0, 2.0], [1.0, 2.0])
-
-    def test_result_keys(self):
-        """Result dict must contain all expected keys."""
-        x = np.arange(1.0, 21.0)
-        y = 1.2 * x + 0.5
-        res = passing_bablok(x, y)
-        expected_keys = {
-            "slope", "slope_lower", "slope_upper",
-            "intercept", "intercept_lower", "intercept_upper",
-            "n", "n_excluded",
-        }
-        assert expected_keys == set(res.keys())
-
-
-# ── Statistics tests ───────────────────────────────────────────────────────────
-
-class TestStatistics:
-
-    def test_r_squared_perfect(self):
-        """Perfect linear relationship → R² = 1.0."""
-        x = np.arange(1.0, 51.0)
-        y = 3.0 * x - 7.0
-        assert abs(r_squared(x, y) - 1.0) < 1e-10
-
-    def test_pearson_r_range(self):
-        """Pearson r is always in [-1, 1]."""
-        rng = np.random.default_rng(7)
-        x = rng.standard_normal(100)
-        y = rng.standard_normal(100)
-        r = pearson_r(x, y)
-        assert -1.0 <= r <= 1.0
-
-    def test_r_squared_equals_pearson_squared(self):
-        """R² must equal pearson_r ** 2."""
-        rng = np.random.default_rng(3)
-        x = rng.uniform(0, 50, 60)
-        y = 0.9 * x + rng.normal(0, 3, 60)
-        assert abs(r_squared(x, y) - pearson_r(x, y) ** 2) < 1e-12
-
-    def test_handles_pandas_series(self):
-        """Functions accept pandas Series as well as numpy arrays."""
-        import pandas as pd
-        s_x = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
-        s_y = pd.Series([2.0, 4.0, 6.0, 8.0, 10.0])
-        assert abs(r_squared(s_x, s_y) - 1.0) < 1e-10
-
-    def test_summary_stats_keys(self):
-        """summary_stats returns all expected keys."""
-        x = np.arange(1.0, 11.0)
-        y = x + 0.5
-        result = summary_stats(x, y)
-        for key in ("pearson_r", "r_squared", "bias", "mean_diff",
-                    "std_diff", "loa_lower", "loa_upper"):
-            assert key in result
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+print("5) En fil ändrad lokalt (avvikelse från validerad version)")
+m, e, ui = scenario("ändrad", lambda r: open(f"{r}/analysis/deming.py","a").write("\n# lokal ändring\n"))
+check("appen fungerar men varnar och namnger deming.py", ui and any("analysis/deming.py" in x for x in m) and not e, (m, e))
+print("\nALLA GODKÄNDA" if not fails else f"\n{fails} FEL")

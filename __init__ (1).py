@@ -239,14 +239,14 @@ def make_bland_altman_plot(
         std_d  = float(np.std(diffs[valid], ddof=1))
         loa_lo = mean_d - 1.96 * std_d
         loa_hi = mean_d + 1.96 * std_d
-        y_axis_title = f"Difference (%) ({y_label} − {x_label}) / mean × 100"
+        y_axis_title = "Difference (%)"
         pct_suffix = " %"
     else:
         diffs  = y - x
         mean_d = mean_diff
         loa_lo = loa_lower
         loa_hi = loa_upper
-        y_axis_title = f"Difference ({y_label} − {x_label})"
+        y_axis_title = "Difference"
         pct_suffix = ""
 
     def fmt(v):
@@ -273,31 +273,26 @@ def make_bland_altman_plot(
                     line=dict(width=0.5, color="white")),
     ))
 
-    fig.add_hline(
-        y=mean_d,
-        line=dict(color=color_mean, width=2),
-        annotation_text=f"{label_mean}: {fmt(mean_d)}{pct_suffix}",
-        annotation_position="right",
-        annotation_font=dict(color=color_mean, size=11),
-    )
+    # Reference lines drawn semi-transparent so points stay visible on top.
+    # Labels are placed OUTSIDE the plotting area (xref="paper", x slightly > 1)
+    # so they can never sit on top of a data point.
+    for _y, _col, _dash, _w, _txt in [
+        (mean_d, color_mean, None,   2.0, f"{label_mean}: {fmt(mean_d)}{pct_suffix}"),
+        (loa_hi, color_loa,  "dash", 1.5, f"{label_loa_upper}: {fmt(loa_hi)}{pct_suffix}"),
+        (loa_lo, color_loa,  "dash", 1.5, f"{label_loa_lower}: {fmt(loa_lo)}{pct_suffix}"),
+    ]:
+        _line = dict(color=_col, width=_w)
+        if _dash:
+            _line["dash"] = _dash
+        fig.add_hline(y=_y, line=_line, opacity=0.45)
+        fig.add_annotation(
+            xref="paper", x=1.012, y=_y, yref="y",
+            text=_txt, showarrow=False,
+            xanchor="left", yanchor="middle",
+            font=dict(color=_col, size=11, family="Arial"),
+        )
 
-    fig.add_hline(
-        y=loa_hi,
-        line=dict(color=color_loa, width=1.5, dash="dash"),
-        annotation_text=f"{label_loa_upper}: {fmt(loa_hi)}{pct_suffix}",
-        annotation_position="right",
-        annotation_font=dict(color=color_loa, size=11),
-    )
-
-    fig.add_hline(
-        y=loa_lo,
-        line=dict(color=color_loa, width=1.5, dash="dash"),
-        annotation_text=f"{label_loa_lower}: {fmt(loa_lo)}{pct_suffix}",
-        annotation_position="right",
-        annotation_font=dict(color=color_loa, size=11),
-    )
-
-    fig.add_hline(y=0, line=dict(color="#9CA3AF", width=1, dash="dot"))
+    fig.add_hline(y=0, line=dict(color="#9CA3AF", width=1, dash="dot"), opacity=0.45)
 
     fig.update_layout(
         title=dict(
@@ -305,7 +300,7 @@ def make_bland_altman_plot(
             font=dict(size=16),
         ),
         xaxis=dict(
-            title=f"Mean of {x_label} and {y_label}",
+            title="Mean",
             range=[resolved_x_min, resolved_x_max],
             showgrid=True, gridcolor="#F3F4F6", zeroline=False,
         ),
