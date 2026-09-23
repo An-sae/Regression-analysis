@@ -40,6 +40,28 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
     return vals["value"]
 
 
+_SUMMARY_IDS = (r"(MEAN|MEDEL|MEDELV[ÄA]RDE|AVERAGE|AVG|MEDIAN|SD|STDAV|STD|STANDARDAVVIKELSE|"
+                r"CV|CV%|VARIANS|VARIANCE|SUM|SUMMA|TOTAL|TOTALT|ANTAL|COUNT|N|MIN|MAX|"
+                r"MINIMUM|MAXIMUM|RANGE)\.?:?")
+
+
+def unit_factor(x: np.ndarray, y: np.ndarray) -> Optional[float]:
+    """
+    Trolig enhetsskillnad mellan filerna: om kvoten y/x ligger nära en tiopotens
+    (±25 %), t.ex. g/L mot g/dL (10) eller fraktion mot procent (0,01),
+    returneras tiopotensen. Annars None. Kräver minst fem positiva par.
+    """
+    x = np.asarray(x, float); y = np.asarray(y, float)
+    ok = (x > 0) & (y > 0) & np.isfinite(x) & np.isfinite(y)
+    if ok.sum() < 5:
+        return None
+    lr = float(np.log10(np.median(y[ok] / x[ok])))
+    k = int(round(lr))
+    if k != 0 and abs(lr - k) < np.log10(1.25):
+        return float(10.0 ** k)
+    return None
+
+
 def _prepare(df, id_col, an_col, res_col, analyte, ignore_leading_zeros):
     """Filtrera analys, normalisera ID, tolka resultat. Returnerar ren tabell."""
     d = df
@@ -54,9 +76,14 @@ def _prepare(df, id_col, an_col, res_col, analyte, ignore_leading_zeros):
         "qualifier": parsed["qualifier"].values, "flag": parsed["flag"].values,
         "reason": parsed["reason"].values, "sci": sci.values,
     })
+    # Summarader längst ned i LIS-rapporter ('Medelvärde', 'SD', 'Antal') är
+    # inga prov och får aldrig paras ihop med varandra mellan filerna.
+    summ = out["key"].str.fullmatch(_SUMMARY_IDS)
     info = {"parse": pinfo, "n_rows": len(out), "n_sci": int(sci.sum()),
-            "n_blank_id": int(((key == "") & ~sci).sum())}
-    out = out[(out["key"] != "")].reset_index(drop=True)
+            "n_blank_id": int(((key == "") & ~sci).sum()),
+            "n_summary": int(summ.sum()),
+            "summary_ids": sorted(set(out.loc[summ, "id_orig"].str.strip()))}
+    out = out[(out["key"] != "") & ~summ].reset_index(drop=True)
     return out, info
 
 
@@ -199,6 +226,9 @@ def match_two_files(df_a, df_b, id_col_a, id_col_b, analysis_col_a, analysis_col
         "blank_ids_a": ia["n_blank_id"], "blank_ids_b": ib["n_blank_id"],
         "parse_a": ia["parse"], "parse_b": ib["parse"],
         "analyte_a": analyte_a, "analyte_b": analyte_b,
+        "summary_rows_a": ia["n_summary"], "summary_rows_b": ib["n_summary"],
+        "summary_ids": sorted(set(ia["summary_ids"]) | set(ib["summary_ids"])),
+        "unit_factor": unit_factor(xa[ok], yb[ok]),
     }
     return xa[ok], yb[ok], rep, summary
 

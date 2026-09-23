@@ -16,3 +16,9 @@ def test_helhet_flera_analyser():
 
 def test_precision_rundtur_skala_uteslutning():
     assert "ALLA GODKÄNDA" in _run("testa_ovrigt.py")
+
+def test_installationskontroll():
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "installation")
+    r = subprocess.run([sys.executable, "testa_installation.py"], cwd=here,
+                       capture_output=True, text=True, timeout=900)
+    assert "ALLA GODKÄNDA" in r.stdout, r.stdout[-2000:]

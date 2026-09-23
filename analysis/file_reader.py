@@ -49,7 +49,12 @@ def _clean_cell(v) -> str:
             return ""
         if v.is_integer() and abs(v) < 1e15:        # 2409150101.0 -> '2409150101'
             return str(int(v))
-        return repr(v)                              # full precision, decimalpunkt
+        r = repr(v)                                 # full precision, decimalpunkt
+        # Exakt tre decimaler ('1.234') kan förväxlas med tusentalsavgränsare.
+        # En avslutande nolla ändrar inte värdet men gör tolkningen entydig.
+        if "." in r and "e" not in r.lower() and len(r.split(".")[1]) == 3:
+            r += "0"
+        return r
     if isinstance(v, (int, np.integer)):
         return str(int(v))
     if hasattr(v, "isoformat"):
@@ -83,10 +88,21 @@ def _find_header(rows: List[List[str]]) -> int:
         if len(filled) < max(2, m - 1):
             continue
         text_share = sum(not _looks_numeric(c) for c in filled) / len(filled)
-        nxt = sum(1 for c in rows[i + 1] if c != "")
+        # nästa rad med full bredd får ligga upp till tre rader ned
+        # (t.ex. en enhetsrad direkt under rubrikraden)
+        nxt = max((sum(1 for c in rows[j] if c != "") for j in range(i + 1, min(i + 4, len(rows)))),
+                  default=0)
         if text_share >= 0.5 and nxt >= max(2, m - 1):
             return i
     return 0
+
+
+def _is_unit_row(header: List[str], row: List[str]) -> bool:
+    """Raden under rubriken innehåller enheter: första cellen tom och minst
+    hälften av de ifyllda cellerna är text som inte är tal."""
+    filled = [c for c in row if c != ""]
+    return (bool(filled) and row[0] == "" and len(filled) < len([h for h in header if h])
+            and sum(not _looks_numeric(c) for c in filled) / len(filled) >= 0.5)
 
 
 def _pick_delimiter(text: str) -> str:
@@ -111,6 +127,25 @@ def list_sheets(raw: bytes, fname: str) -> List[str]:
         return []
 
 
+def best_sheet(raw: bytes, fname: str) -> Optional[str]:
+    """Excel: välj bladet med flest rader som har minst två ifyllda celler.
+    Ett inledande informations- eller titelblad väljs därmed inte."""
+    sheets = list_sheets(raw, fname)
+    if len(sheets) < 2:
+        return sheets[0] if sheets else None
+    best, best_n = sheets[0], -1
+    for sh in sheets:
+        try:
+            g = pd.read_excel(io.BytesIO(raw), sheet_name=sh, header=None, dtype=object,
+                              keep_default_na=False, na_filter=False)
+        except Exception:
+            continue
+        n = int(sum(sum(1 for v in r if str(v).strip() != "") >= 2 for r in g.itertuples(index=False)))
+        if n > best_n:
+            best, best_n = sh, n
+    return best
+
+
 def read_table(raw: bytes, fname: str, sheet: Optional[str] = None,
                header_row="auto") -> Tuple[pd.DataFrame, Dict]:
     """
@@ -125,7 +160,8 @@ def read_table(raw: bytes, fname: str, sheet: Optional[str] = None,
     if low.endswith((".xlsx", ".xlsm", ".xls")):
         sheets = list_sheets(raw, fname)
         sh = sheet if sheet in sheets else (sheets[0] if sheets else 0)
-        grid = pd.read_excel(io.BytesIO(raw), sheet_name=sh, header=None, dtype=object)
+        grid = pd.read_excel(io.BytesIO(raw), sheet_name=sh, header=None, dtype=object,
+                             keep_default_na=False, na_filter=False)   # 'NA' = natrium
         rows = [[_clean_cell(v) for v in r] for r in grid.itertuples(index=False)]
         info.update(kind="Excel", sheet=sh, sheets=sheets, encoding="—", delimiter="—")
     else:
@@ -158,6 +194,9 @@ def read_table(raw: bytes, fname: str, sheet: Optional[str] = None,
             seen[name] += 1
             cols.append(name if seen[name] == 1 else f"{name} ({seen[name]})")
         body = rows[h + 1:]
+        if body and _is_unit_row(rows[h], body[0]):           # 'B-Hb' / 'g/L'
+            cols = [f"{c} ({u})" if u else c for c, u in zip(cols, body[0])]
+            body = body[1:]
     df = pd.DataFrame(body, columns=cols, dtype=object)
     # helt tomma kolumner utan namn tas bort
     drop = [c for c in df.columns if c.startswith("Column ") and h is not None
@@ -230,6 +269,8 @@ def _evidence(num: str) -> str:
                 return "c" if sep == "." else "p"
             if len(parts[1]) != 3:                    # 12,3 / 0,60 / 12.50
                 return tag
+            if parts[0].lstrip("+-") in ("0", ""):    # 0,411: aldrig tusental
+                return tag
     return ""                                          # 1,234 / 1.234 / 123 = tvetydigt
 
 
@@ -256,9 +297,21 @@ def parse_numeric(series: pd.Series, default_decimal: str = ",") -> Tuple[pd.Dat
             out.append((np.nan, "", txt, "empty" if txt.upper() in _TEXT_NA else "text"))
             continue
         e = _evidence(num)
-        d = e and ("." if e == "p" else ",") or dec
-        if not e and ("," in num or "." in num):
-            ambiguous += 1
+        if e:
+            d = "." if e == "p" else ","
+        elif "," in num or "." in num:
+            # Tvetydigt värde: avgörs av hur SAMMA tecken används i kolumnen.
+            sep = "," if "," in num else "."
+            own = ev["c"] if sep == "," else ev["p"]      # sep som decimal på annat håll
+            other = ev["p"] if sep == "," else ev["c"]    # andra tecknet som decimal
+            if own:
+                d = sep                                   # t.ex. '3,460' bland '155,0'
+            elif other:
+                d = "." if sep == "," else ","            # '1,786' bland '12.50' -> tusental
+            else:
+                d = dec; ambiguous += 1
+        else:
+            d = dec
         th = "," if d == "." else "."
         try:
             val = (float(num) if "e" in num.lower()
@@ -275,7 +328,7 @@ def parse_numeric(series: pd.Series, default_decimal: str = ",") -> Tuple[pd.Dat
                       index=series.index)
     info = {"decimal": dec, "evidence_point": ev["p"], "evidence_comma": ev["c"],
             "conflict": conflict,
-            "ambiguous": ambiguous if (ev["p"] == 0 and ev["c"] == 0) else 0}
+            "ambiguous": ambiguous}
     return df, info
 
 
@@ -313,11 +366,23 @@ _ALIAS = {
     "GLUC": "GLUKOS", "GLU": "GLUKOS", "GLUCOSE": "GLUKOS",
     "NA": "NATRIUM", "SODIUM": "NATRIUM", "K": "KALIUM", "POTASSIUM": "KALIUM",
     "ALBU": "ALBUMIN", "ALB": "ALBUMIN", "TSH": "TSH", "FT4": "FT4", "FT3": "FT3",
+    # hematologi: instrumentnamn <-> svenska NPU-kortnamn
+    "WBC": "LPK", "LEUKOCYTER": "LPK", "LEUKOCYTES": "LPK", "LPK": "LPK",
+    "RBC": "EPK", "ERYTROCYTER": "EPK", "ERYTHROCYTES": "EPK", "EPK": "EPK",
+    "HGB": "HB", "HB": "HB", "HEMOGLOBIN": "HB", "HAEMOGLOBIN": "HB",
+    "HCT": "EVF", "EVF": "EVF", "HEMATOKRIT": "EVF", "HAEMATOCRIT": "EVF",
+    "PLT": "TPK", "TPK": "TPK", "TROMBOCYTER": "TPK", "PLATELETS": "TPK",
+    "NATRIUM": "NATRIUM", "KALIUM": "KALIUM",
 }
 
 
+def strip_unit(name: str) -> str:
+    """'HGB(g/dL)' -> 'HGB', 'B-Hb (g/L)' -> 'B-Hb', 'WBC [10^9/L]' -> 'WBC'."""
+    return re.sub(r"\s*[\(\[][^\)\]]*[\)\]]\s*$", "", str(name)).strip()
+
+
 def canonical_analyte(name: str) -> str:
-    s = str(name).upper().strip()
+    s = strip_unit(name).upper().strip()
     s = re.sub(r"^(P|S|B|U|FP|PT|CSF|SE|PL|SR|HB)\s*[-_ ]\s*", "", s)   # NPU-prefix 'P-'
     s = re.sub(r"[^A-Z0-9ÅÄÖ]", "", s)
     s = re.sub(r"(?<=[A-ZÅÄÖ])\d+$", "", s)                          # CRP4 -> CRP
@@ -339,3 +404,62 @@ def suggest_analyte(name_a: str, candidates_b: List[str]) -> Tuple[Optional[str]
             if canonical_analyte(b) == best[0]:
                 return b, "similar"
     return None, ""
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 5. Långt eller brett format
+# ════════════════════════════════════════════════════════════════════════════
+# Kolumner som beskriver provet eller körningen, inte ett analysresultat.
+_META = re.compile(
+    r"(date|datum|time|tid\b|klockslag|rack|pos(ition)?\b|seq|sekvens|analy[sz]er|instrument|"
+    r"nickname|order|error|mode|mark|flag|flagga|abnormal|suspect|/m$|info|comment|"
+    r"kommentar|remark|patient|age|ålder|sex|kön|operator|user|status|lot|unit|enhet)",
+    re.I)
+
+
+def detect_layout(df: pd.DataFrame) -> Dict:
+    """
+    Avgör om tabellen är lång (en rad per resultat: ID, analys, resultat) eller
+    bred (en rad per prov, en kolumn per analys, som Sysmex XN och LIS-pivot).
+
+    Returnerar {"layout", "id_col", "an_col", "res_col", "value_cols"}.
+    """
+    cols = list(df.columns)
+    id_col = guess_column(cols, "id")
+    an_col, res_col = guess_column(cols, "an"), guess_column(cols, "res")
+
+    def num_share(c):
+        v = df[c].astype(str).str.strip()
+        v = v[v != ""]
+        if len(v) < 3:
+            return 0.0
+        p, _ = parse_numeric(v.reset_index(drop=True))
+        ok = p["value"].notna() | p["reason"].isin(["below", "above"])
+        return float(ok.mean())
+
+    value_cols = [c for c in cols
+                  if c != id_col and not _META.search(str(c)) and num_share(c) >= 0.6]
+    long_ok = (an_col is not None and res_col is not None and an_col != res_col
+               and num_share(res_col) >= 0.5)
+    layout = "long" if long_ok or len(value_cols) < 2 else "wide"
+    return {"layout": layout, "id_col": id_col, "an_col": an_col if layout == "long" else None,
+            "res_col": res_col if layout == "long" else None,
+            "value_cols": value_cols if layout == "wide" else [],
+            "numeric_cols": value_cols}            # alltid, för manuellt val av brett format
+
+
+WIDE_AN, WIDE_RES = "Analysis", "Result"
+
+
+def to_long(df: pd.DataFrame, id_col: str, value_cols: List[str]) -> pd.DataFrame:
+    """Brett -> långt: en rad per (prov, analys). Kolumnrubriken blir analysnamnet,
+    inklusive eventuell enhet, t.ex. 'HGB(g/dL)'."""
+    if not value_cols:
+        raise ValueError("No result columns selected.")
+    out = df[[id_col] + list(value_cols)].melt(id_vars=[id_col], var_name=WIDE_AN,
+                                                value_name=WIDE_RES)
+    out[WIDE_AN] = out[WIDE_AN].astype(str).str.strip()
+    out.attrs["read_info"] = dict(df.attrs.get("read_info", {}), layout="wide",
+                                  wide_columns=len(value_cols))
+    return out.reset_index(drop=True)
