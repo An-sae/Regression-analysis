@@ -21,17 +21,27 @@ change in CHANGELOG below. Re-run tests/ and update VALIDATED_ON.
   PATCH  bug fix or cosmetic change
 """
 
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 
 # Date the full validation suite was last executed against the reference
 # datasets (see Valideringsrapport.docx).
-VALIDATED_ON = "2026-09-22"
+VALIDATED_ON = "2026-09-30"
 
 # Short description shown next to the version in the application.
 STATUS = "Validerad"
 
 
 CHANGELOG = [
+    ("2.2.1", "2026-09-30",
+     "Rättning av rubrikradsidentifieringen: i breda instrumentexporter (Sysmex XN) "
+     "kunde en misslyckad körning, där alla resultat är '----' eller '++++', tas för "
+     "rubrikrad när raderna direkt under den riktiga rubriken (t.ex. QC-rader) hade "
+     "färre ifyllda flaggkolumner än övriga rader. Rubrikceller måste nu innehålla "
+     "bokstäver, och kravet på bredd för raden under rubriken är sänkt till halva den "
+     "vanliga radbredden. Nytt test: tests/instrument/testa_rubrikrad.py. "
+     "Varningen för omkörningar räknar nu prov i stället för rader (en bred "
+     "fil gav tidigare 22 rader för en omkörd provrad) och visar vilka prov-ID det gäller. "
+     "Demofiler från Sysmex XN-1000 och XN-2000 i data/demo."),
     ("2.2.0", "2026-09-22",
      "Brett format: filer med en kolumn per analys (Sysmex XN, LIS-pivot) "
      "identifieras och läses automatiskt. Analysnamn kopplas mellan instrument "

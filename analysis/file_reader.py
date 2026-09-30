@@ -71,10 +71,16 @@ def _looks_numeric(s: str) -> bool:
 
 def _find_header(rows: List[List[str]]) -> int:
     """
-    Rubrikraden = första raden som (a) har lika många fält som tabellens
-    vanligaste radlängd, (b) till minst hälften består av text som inte är tal,
-    och (c) följs av en rad med samma längd. Metadata- och titelrader
-    ovanför har färre fält och hoppas därmed över.
+    Rubrikraden = första raden som (a) har minst lika många ifyllda fält som
+    tabellens vanligaste radlängd, (b) till minst hälften består av namn
+    (text som innehåller en bokstav), där minst hälften är olika, och
+    (c) följs inom tre rader av en rad med minst halva den vanliga bredden.
+    Metadata- och titelrader ovanför har färre fält och hoppas därmed över.
+
+    (b) kräver bokstäver så att en misslyckad instrumentkörning, där alla
+    resultat är '----' eller '++++', inte kan tas för rubrik. (c) kräver bara
+    halva bredden eftersom instrumentexporter har flaggkolumner som bara är
+    ifyllda på vissa rader (t.ex. QC-rader direkt under rubriken). [v2.2.1]
     """
     lens = [sum(1 for c in r if c != "") for r in rows]
     if not lens:
@@ -87,12 +93,14 @@ def _find_header(rows: List[List[str]]) -> int:
         filled = [c for c in r if c != ""]
         if len(filled) < max(2, m - 1):
             continue
-        text_share = sum(not _looks_numeric(c) for c in filled) / len(filled)
-        # nästa rad med full bredd får ligga upp till tre rader ned
+        names = [c for c in filled if not _looks_numeric(c) and any(ch.isalpha() for ch in c)]
+        text_share = len(names) / len(filled)
+        distinct = len(set(names)) / len(names) if names else 0.0
+        # nästa rad med data får ligga upp till tre rader ned
         # (t.ex. en enhetsrad direkt under rubrikraden)
         nxt = max((sum(1 for c in rows[j] if c != "") for j in range(i + 1, min(i + 4, len(rows)))),
                   default=0)
-        if text_share >= 0.5 and nxt >= max(2, m - 1):
+        if text_share >= 0.5 and distinct >= 0.5 and nxt >= max(2, (m + 1) // 2):
             return i
     return 0
 

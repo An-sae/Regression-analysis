@@ -11,7 +11,7 @@ import streamlit as st
 from analysis.data_loader import (load_long_format, match_two_files, find_duplicates,
                                   list_analytes, MultipleResultsError, build_matched_excel)
 from analysis.file_reader import (list_sheets, best_sheet, guess_column, suggest_analyte,
-                                  detect_layout, to_long, WIDE_AN, WIDE_RES)
+                                  detect_layout, to_long, normalize_ids, WIDE_AN, WIDE_RES)
 from analysis.overview import suggested_pairs, compare_all, build_overview_excel
 
 DUP_LBL = {"first_valid": "Keep first valid", "last_valid": "Keep last valid",
@@ -140,8 +140,22 @@ def two_file_sidebar(t) -> dict:
         d_a = find_duplicates(A, id_a, an_a, rs_a, zeros)
         d_b = find_duplicates(B, id_b, an_b, rs_b, zeros)
         if (not d_a.empty or not d_b.empty) and (an_a and an_b or single):
-            st.warning(t("⚠️ Repeated results (reruns): file A {a} rows, file B {b} rows.")
-                       .format(a=len(d_a), b=len(d_b)))
+            def _samples(d, id_col):
+                # Räkna prov, inte rader: en bred fil blir en rad per analys vid
+                # omvandlingen, så en omkörning av 11 parametrar är 22 rader. [v2.2.1]
+                if d.empty:
+                    return 0, []
+                key, _ = normalize_ids(d[id_col], zeros)
+                first = d.groupby(key, sort=False)[id_col].first().astype(str).str.strip()
+                return len(first), list(first)
+            n_a, ids_a = _samples(d_a, id_a)
+            n_b, ids_b = _samples(d_b, id_b)
+            st.warning(t("⚠️ Repeated results (reruns): file A {a} samples, file B {b} samples.")
+                       .format(a=n_a, b=n_b))
+            for fl, ids in (("A", ids_a), ("B", ids_b)):
+                if ids:
+                    st.caption(t("Samples with repeated results in file {f}: {ids}").format(
+                        f=fl, ids=", ".join(ids[:8]) + (" …" if len(ids) > 8 else "")))
             dup = st.radio(t("Resolve duplicates"), list(DUP_LBL), key="lf_dup",
                            format_func=lambda v: t(DUP_LBL[v]))
 

@@ -1,5 +1,5 @@
 """
-Kör valideringssviten och skapar Valideringsrapport.docx.
+Kör valideringssviten och skapar valideringsresultat.json och Valideringsrapport.docx.
 
 Kör från programmappen:      python skapa_valideringsrapport.py
 
@@ -180,4 +180,74 @@ json.dump(dict(version=VERSION, validated_on=VALIDATED_ON,
           open("valideringsresultat.json", "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 print("Resultat sparade i valideringsresultat.json")
+
+
+# ── Word-rapport från just denna körning ─────────────────────────────────────
+def skriv_rapport(path="Valideringsrapport.docx"):
+    """Valideringsrapporten byggs av de värden som beräknades vid körningen."""
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def shade(cell, hexcol):
+        tcPr = cell._tc.get_or_add_tcPr(); sh = OxmlElement("w:shd")
+        sh.set(qn("w:val"), "clear"); sh.set(qn("w:color"), "auto"); sh.set(qn("w:fill"), hexcol)
+        tcPr.append(sh)
+
+    def num(v):
+        return (f"{v:.6g}" if isinstance(v, float) else str(v)).replace(".", ",").replace("-", "−")
+
+    d = Document()
+    for sec in d.sections:
+        sec.left_margin = sec.right_margin = Cm(2); sec.top_margin = sec.bottom_margin = Cm(2)
+    st_ = d.styles["Normal"]; st_.font.name = "Calibri"; st_.font.size = Pt(10.5)
+    h = d.add_heading("Valideringsrapport — Method Comparison Tool", 0)
+    d.add_paragraph(f"Programversion {VERSION} · validerad {VALIDATED_ON} · körning "
+                    f"{datetime.datetime.now():%Y-%m-%d %H:%M} · Python {sys.version.split()[0]}")
+    p = d.add_paragraph()
+    r = p.add_run(f"Samlat utfall: {'GODKÄND' if all_ok else 'UNDERKÄND'}  "
+                  f"({n_ok} av {n_all} referenskontroller; enhetstester: {unit})")
+    r.bold = True; r.font.size = Pt(12)
+    r.font.color.rgb = RGBColor(0x06, 0x5F, 0x46) if all_ok else RGBColor(0xB9, 0x1C, 0x1C)
+
+    d.add_heading("1  Syfte och omfattning", 1)
+    d.add_paragraph(
+        "Rapporten visar att programmets statistiska beräkningar återger publicerade "
+        "referensvärden. Den skapas automatiskt av skapa_valideringsrapport.py och "
+        "innehåller de värden som faktiskt beräknades vid körningen ovan, inte "
+        "förskrivna siffror. Filinläsning och matchning verifieras separat med "
+        "testerna i tests/filinlasning och tests/instrument.")
+    d.add_heading("2  Resultat per kontroll", 1)
+    t = d.add_table(rows=1, cols=6); t.style = "Table Grid"; t.autofit = False
+    for c, txt in zip(t.rows[0].cells, ["Område", "Storhet", "Beräknat", "Referens", "Tolerans", "Utfall"]):
+        c.text = txt; c.paragraphs[0].runs[0].bold = True; shade(c, "DCE6F1")
+    for x in results:
+        row = t.add_row().cells
+        for c, txt in zip(row, [x["area"], x["name"], num(x["got"]), num(x["ref"]), num(x["tol"]),
+                               "Godkänd" if x["ok"] else "Underkänd"]):
+            c.text = txt
+            for rr in c.paragraphs[0].runs: rr.font.size = Pt(9)
+        shade(row[5], "D1FAE5" if x["ok"] else "FEE2E2")
+    for i, w in enumerate([Cm(2.6), Cm(6.8), Cm(2.4), Cm(1.9), Cm(1.6), Cm(1.8)]):
+        for c in t.columns[i].cells: c.width = w
+    d.add_heading("3  Referenser", 1)
+    for src in sorted({x["src"] for x in results}):
+        d.add_paragraph(src, style="List Bullet")
+    d.add_heading("4  Godkännande", 1)
+    g = d.add_table(rows=4, cols=4); g.style = "Table Grid"
+    for c, txt in zip(g.rows[0].cells, ["Roll", "Namn", "Datum", "Signatur"]):
+        c.text = txt; c.paragraphs[0].runs[0].bold = True; shade(c, "DCE6F1")
+    for i, roll in enumerate(["Utförd av", "Granskad av", "Godkänd av"], 1):
+        g.rows[i].cells[0].text = roll
+    d.save(path)
+    print(f"Valideringsrapport skriven: {path} (version {VERSION})")
+
+
+try:
+    skriv_rapport()
+except ImportError:
+    print("OBS: python-docx saknas, Valideringsrapport.docx skrevs inte. "
+          "Installera med: pip install python-docx")
 sys.exit(0 if all_ok else 1)
