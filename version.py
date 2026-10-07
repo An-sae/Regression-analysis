@@ -21,17 +21,26 @@ change in CHANGELOG below. Re-run tests/ and update VALIDATED_ON.
   PATCH  bug fix or cosmetic change
 """
 
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 
 # Date the full validation suite was last executed against the reference
 # datasets (see Valideringsrapport.docx).
-VALIDATED_ON = "2026-09-30"
+VALIDATED_ON = "2026-10-07"
 
 # Short description shown next to the version in the application.
 STATUS = "Validerad"
 
 
 CHANGELOG = [
+    ("2.2.2", "2026-10-07",
+     "Gränssnittet omarbetat: dekorativa emojier och långa tankstreck borttagna, "
+     "dubbelrubriken på startsidan ersatt med en rubrik, och startsidan visar nu alla "
+     "sex analyser i en tabell (fyrfältstabell och Bland–Altman saknades). Referenser "
+     "skrivna som citat; länken till Chesher 2008 pekade fel och går nu till PMC. "
+     "Meddelanden som tidigare visades på engelska i svenskt läge är översatta. "
+     "Valet 'Två filer' heter nu 'Två filer (matcha på prov-ID)' eftersom även breda "
+     "filer läses. Rättning: radioknappar och listor tappade markeringen när språket "
+     "byttes. Inga beräkningar ändrade. Nytt test: tests/test_granssnittstext.py."),
     ("2.2.1", "2026-09-30",
      "Rättning av rubrikradsidentifieringen: i breda instrumentexporter (Sysmex XN) "
      "kunde en misslyckad körning, där alla resultat är '----' eller '++++', tas för "

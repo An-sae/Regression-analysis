@@ -35,7 +35,7 @@ def run(file_a, file_b, lang="sv", setup=None):
     at = AppTest.from_function(app_with_files, default_timeout=180)
     at.session_state["_lang"] = lang
     at.run()
-    at.radio(key="lf_mode").set_value("Two long-format files (match by ID)").run()
+    at.radio(key="lf_mode").set_value("Two files (match by sample ID)").run()
     if setup:
         setup(at)
     return at

@@ -21,7 +21,7 @@ def run(fa, fb, lang="sv"):
     os.environ.update(UI_ROOT=ROOT, UI_FILE_A=os.path.join(HERE, fa), UI_FILE_B=os.path.join(HERE, fb))
     at = AppTest.from_function(app_with_files, default_timeout=300)
     at.session_state["_lang"] = lang; at.run()
-    at.radio(key="lf_mode").set_value("Two long-format files (match by ID)").run()
+    at.radio(key="lf_mode").set_value("Two files (match by sample ID)").run()
     return at
 
 def texts(at):
@@ -69,7 +69,7 @@ check("Excel-nedladdning finns", any(d.key == "ov_dl" for d in at.get("download_
 print("\n3) Engelskt läge: inga svenska texter")
 at = run("sysmex_xn_A.csv", "lis_pivot_hematologi.xlsx", "en"); T = texts(at)
 import re
-own = [x for x in T if any(c in re.sub(r"\([^)]*\)", "", x) for c in "åäöÅÄÖ")]   # (…) = citerat ur filen
+own = [x for x in T if any(c in re.sub(r"\([^)]*\)", "", x.replace("Västmanland", "")) for c in "åäöÅÄÖ")]   # ortnamn tillåtet   # (…) = citerat ur filen
 check("inga svenska texter (utöver filernas egna namn)", not own, own)
 check("engelsk formatbeskrivning", any("wide, 6 analyses" in x for x in T), T)
 

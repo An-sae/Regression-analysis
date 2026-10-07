@@ -49,7 +49,7 @@ def t(text: str) -> str:
 # ── Svenska översättningar, nyckel = engelsk originaltext ────────────────────
 SV = {
     # --- Rubriker och navigation ---------------------------------------------
-    "📊 Method Comparison": "📊 Metodjämförelse",
+    "Method Comparison": "Metodjämförelse",
     "##### ① &nbsp;Choose your analysis": "##### ① &nbsp;Välj analys",
     "##### ② &nbsp;Load your data": "##### ② &nbsp;Ladda in data",
     "##### ③ &nbsp;Name your methods": "##### ③ &nbsp;Namnge metoderna",
@@ -73,7 +73,7 @@ SV = {
         "2×2-tabell för positiv/negativ-metoder",
 
     # --- Deming ---------------------------------------------------------------
-    "⚙️ Deming options": "⚙️ Deming-inställningar",
+    "Deming options": "Deming-inställningar",
     "Weighted Deming": "Viktad Deming",
     "Error ratio λ = Var(y)/Var(x)": "Felkvot λ = Var(y)/Var(x)",
     "On: errors proportional to concentration (constant CV). "
@@ -86,11 +86,11 @@ SV = {
     # --- Datainläsning --------------------------------------------------------
     "Data format": "Dataformat",
     "Single file (two columns)": "En fil (två kolumner)",
-    "Two long-format files (match by ID)":
-        "Två filer i långt format (matcha på prov-ID)",
+    "Two files (match by sample ID)":
+        "Två filer (matcha på prov-ID)",
     "Input method": "Inmatningssätt",
-    "📂 Upload file": "📂 Ladda upp fil",
-    "📋 Paste data": "📋 Klistra in data",
+    "Upload file": "Ladda upp fil",
+    "Paste data": "Klistra in data",
     "Upload CSV or Excel": "Ladda upp CSV eller Excel",
     "Sheet / tab": "Blad / flik",
     "Header row?": "Rubrikrad?",
@@ -102,14 +102,14 @@ SV = {
     "Copy two columns from Excel and paste below.":
         "Kopiera två kolumner från Excel och klistra in nedan.",
     "Paste data here": "Klistra in data här",
-    "**File A — Reference method**": "**Fil A — Referensmetod**",
-    "**File B — Candidate method**": "**Fil B — Kandidatmetod**",
+    "**File A: reference method**": "**Fil A: referensmetod**",
+    "**File B: candidate method**": "**Fil B: kandidatmetod**",
     "Upload reference file": "Ladda upp referensfil",
     "Upload candidate file": "Ladda upp kandidatfil",
     "Header row? (applies to both files)":
         "Rubrikrad? (gäller båda filerna)",
-    "**Column mapping — File A**": "**Kolumnval — Fil A**",
-    "**Column mapping — File B**": "**Kolumnval — Fil B**",
+    "**Column mapping, file A**": "**Kolumnval, fil A**",
+    "**Column mapping, file B**": "**Kolumnval, fil B**",
     "Sample ID": "Prov-ID",
     "Analysis": "Analys",
     "Result": "Resultat",
@@ -124,13 +124,13 @@ SV = {
         "Alla rader behandlas som en och samma analys.",
     "No common analytes found in both files.":
         "Inga gemensamma analyter i båda filerna.",
-    "Columns named Column 1, Column 2 … — first row kept as data.":
-        "Kolumnerna heter Kolumn 1, Kolumn 2 … — första raden behålls som data.",
+    "Columns are named Column 1, Column 2 and so on. The first row is kept as data.":
+        "Kolumnerna heter Kolumn 1, Kolumn 2 osv. Första raden behålls som data.",
     "**Filter rows (optional)**": "**Filtrera rader (valfritt)**",
     "Filter by column": "Filtrera på kolumn",
-    "— no filter —": "— inget filter —",
-    "No values selected — using all rows.":
-        "Inga värden valda — alla rader används.",
+    "(no filter)": "(inget filter)",
+    "No values selected, so all rows are used.":
+        "Inga värden valda, så alla rader används.",
 
     # --- Metodnamn ------------------------------------------------------------
     "Reference method (x-axis)": "Referensmetod (x-axel)",
@@ -143,22 +143,22 @@ SV = {
     "Bland–Altman as % difference": "Bland–Altman som %-skillnad",
     "Off: absolute difference (y − x). On: percentage of the mean.":
         "Av: absolut skillnad (y − x). På: procent av medelvärdet.",
-    "🏷️ Titles": "🏷️ Rubriker",
+    "Titles": "Rubriker",
     "Regression plot": "Regressionsdiagram",
     "Bland–Altman plot": "Bland–Altman-diagram",
     "Leave blank for automatic title": "Lämna tomt för automatisk rubrik",
-    "📐 Axis ranges": "📐 Axelgränser",
+    "Axis ranges": "Axelgränser",
     "Leave any field blank for automatic scaling.":
         "Lämna fältet tomt för automatisk skalning.",
     "**Regression plot**": "**Regressionsdiagram**",
     "**Bland–Altman plot**": "**Bland–Altman-diagram**",
     "X min": "X min", "X max": "X max", "Y min": "Y min", "Y max": "Y max",
-    "🎨 Colours": "🎨 Färger",
+    "Colours": "Färger",
     "Points": "Punkter", "Identity": "Identitetslinje", "Fit": "Anpassad linje",
     "Show 95% CI band": "Visa 95 % KI-band",
     "CI band": "KI-band", "CI transparency": "KI-genomskinlighet",
     "Mean bias": "Systematiskt fel", "LoA": "Överensstämmelsegränser",
-    "✏️ Legend & label text": "✏️ Text i förklaring och etiketter",
+    "Legend & label text": "Text i förklaring och etiketter",
     "Fit line": "Anpassad linje", "Mean line": "Medellinje",
     "Upper LoA": "Övre gräns", "Lower LoA": "Undre gräns",
     "Observations": "Observationer", "Identity (y = x)": "Identitet (y = x)",
@@ -168,30 +168,30 @@ SV = {
     "Total rows": "Antal rader",
     "Missing / excluded": "Saknade / uteslutna",
     "Valid pairs": "Giltiga par",
-    "▶ Analyze": "▶ Analysera",
-    "👆 Click **Analyze** to run the regression.":
-        "👆 Klicka på **Analysera** för att köra regressionen.",
+    "Analyze": "Analysera",
+    "Click **Analyze** to run the regression.":
+        "Klicka på **Analysera** för att köra regressionen.",
     "Statistic": "Storhet", "Value": "Värde",
     "Slope": "Lutning", "Intercept": "Intercept",
     "Bias": "Systematiskt fel",
     "LoA lower": "Undre överensstämmelsegräns",
     "LoA upper": "Övre överensstämmelsegräns",
     "Export": "Export",
-    "⚙️ Image resolution": "⚙️ Bildupplösning",
+    "Image resolution": "Bildupplösning",
     "Resolution": "Upplösning",
-    "📐 SVG": "📐 SVG",
+    "SVG": "SVG",
     "**Results data & full report**": "**Resultatdata och fullständig rapport**",
-    "📥 Results CSV": "📥 Resultat (CSV)",
-    "📄 HTML Report": "📄 HTML-rapport",
+    "Results CSV": "Resultat (CSV)",
+    "HTML Report": "HTML-rapport",
     "**Matched pairs data**": "**Matchade par**",
-    "📊 Download matched pairs (Excel)":
-        "📊 Ladda ner matchade par (Excel)",
-    "↺ Restore all points": "↺ Återställ alla punkter",
+    "Download matched pairs (Excel)":
+        "Ladda ner matchade par (Excel)",
+    "Restore all points": "Återställ alla punkter",
     "Excluded from analysis (add or remove here)":
         "Uteslutna ur analysen (lägg till eller ta bort här)",
-    "💡 Click a point, or drag a box/lasso, to exclude it from both "
+    "Click a point, or drag a box/lasso, to exclude it from both "
     "plots and all statistics.":
-        "💡 Klicka på en punkt, eller dra en ruta eller lasso, för att "
+        "Klicka på en punkt, eller dra en ruta eller lasso, för att "
         "utesluta den ur båda diagrammen och all statistik.",
 
     # --- Konfusionsmatris -----------------------------------------------------
@@ -200,30 +200,30 @@ SV = {
     "S ≥ (mm)": "S ≥ (mm)", "R ≤ (mm)": "R ≤ (mm)",
     "Step size (mm per cell)": "Stegstorlek (mm per cell)",
     "Essential agreement band (± mm)": "Band för essential agreement (± mm)",
-    "📐 Range & layout": "📐 Område och utseende",
+    "Range & layout": "Område och utseende",
     "Leave blank for automatic range.": "Lämna tomt för automatiskt område.",
     "Show diagonal lines": "Visa diagonallinjer",
     "Show n = total (outside frame)": "Visa n = totalt (utanför ramen)",
-    "🏷️ Title": "🏷️ Rubrik",
+    "Title": "Rubrik",
     "Matrix title": "Matrisrubrik",
     "Matrix colour": "Matrisfärg",
     "Coloured bands (mm from diagonal)": "Färgade band (mm från diagonalen)",
-    "🔢 Cell numbers": "🔢 Siffror i cellerna",
+    "Cell numbers": "Siffror i cellerna",
     "Font size": "Teckenstorlek", "Bold": "Fet stil",
     "On shaded cells": "På färgade celler", "On white cells": "På vita celler",
     "Export matrix": "Exportera matris",
-    "⚙️ Export resolution": "⚙️ Upplösning vid export",
-    "📥 Matrix CSV": "📥 Matris (CSV)",
-    "ℹ️ Acceptability thresholds": "ℹ️ Acceptanskriterier",
+    "Export resolution": "Upplösning vid export",
+    "Matrix CSV": "Matris (CSV)",
+    "Acceptability thresholds": "Acceptanskriterier",
     "Categorical Agr.": "Kategoriöverensstämmelse",
 
     # --- Precision ------------------------------------------------------------
-    "Precision Evaluation — CLSI EP15-A3":
-        "Precisionsvärdering — CLSI EP15-A3",
-    "📂 Wide format (columns = days)": "📂 Brett format (kolumn = dag)",
-    "📋 Paste wide format": "📋 Klistra in brett format",
-    "🔍 Long format (search by Sample ID)":
-        "🔍 Långt format (sök på prov-ID)",
+    "Precision evaluation according to CLSI EP15-A3":
+        "Precisionsvärdering enligt CLSI EP15-A3",
+    "Wide format (columns = days)": "Brett format (kolumn = dag)",
+    "Paste wide format": "Klistra in brett format",
+    "Long format (search by Sample ID)":
+        "Långt format (sök på prov-ID)",
     "Each column = one day, each row = one replicate. "
     "Column headers = day names.":
         "Varje kolumn = en dag, varje rad = ett replikat. "
@@ -248,77 +248,45 @@ SV = {
     "Replicates / day": "Replikat per dag",
     "Total measurements": "Antal mätningar",
     "**Sammanfattning**": "**Sammanfattning**",
-    "📊 Full variance component breakdown":
-        "📊 Fullständig uppdelning av varianskomponenter",
-    "📋 Per-day summary": "📋 Sammanställning per dag",
-    "📊 Statistical settings": "📊 Statistiska inställningar",
+    "Full variance component breakdown":
+        "Fullständig uppdelning av varianskomponenter",
+    "Per-day summary": "Sammanställning per dag",
+    "Statistical settings": "Statistiska inställningar",
     "Significance level (α)": "Signifikansnivå (α)",
     "Concentration levels tested (q)": "Antal testade nivåer (q)",
-    "🏭 Manufacturer claims (optional)":
-        "🏭 Tillverkarens påstående (valfritt)",
+    "Manufacturer claims (optional)":
+        "Tillverkarens påstående (valfritt)",
     "Claimed repeatability SD (σr)": "Påstådd repeterbarhet SD (σr)",
     "Claimed within-lab SD (σl)": "Påstådd totalimprecision SD (σl)",
-    "📥 Download journal table (CSV)":
-        "📥 Ladda ner tabell i tidskriftsformat (CSV)",
-    "📊 Download Excel (raw data + summary)":
-        "📊 Ladda ner Excel (rådata och sammanfattning)",
+    "Download journal table (CSV)":
+        "Ladda ner tabell i tidskriftsformat (CSV)",
+    "Download Excel (raw data + summary)":
+        "Ladda ner Excel (rådata och sammanfattning)",
     "Component": "Komponent", "df": "Frihetsgrader",
 
     # --- Övrigt ---------------------------------------------------------------
-    "↻ Reset all settings": "↻ Återställ alla inställningar",
-    "📚 References": "📚 Referenser",
-    "🔒 Dataskydd": "🔒 Dataskydd",
-    "👈 Upload a CSV or Excel file in the sidebar.":
-        "👈 Ladda upp en CSV- eller Excel-fil i menyn.",
-    "👈 Select the columns to use in the sidebar.":
-        "👈 Välj vilka kolumner som ska användas i menyn.",
-    "👈 Paste your data in the sidebar.":
-        "👈 Klistra in dina data i menyn.",
-    "📄 Expected data format": "📄 Förväntat dataformat",
-    "📚 Key references": "📚 Viktiga referenser",
+    "Reset all settings": "Återställ alla inställningar",
+    "References": "Referenser",
+    "Dataskydd": "Dataskydd",
+    "Upload a CSV or Excel file in the sidebar.":
+        "Ladda upp en CSV- eller Excel-fil i menyn.",
+    "Select the columns to use in the sidebar.":
+        "Välj vilka kolumner som ska användas i menyn.",
+    "Paste your data in the sidebar.":
+        "Klistra in dina data i menyn.",
+    "Expected data format": "Förväntat dataformat",
+    "Key references": "Viktiga referenser",
     # --- Startsidan -----------------------------------------------------------
-    "\n## Method Comparison Tool\n\nA simple tool for comparing two analytical "
-    "measurement methods in clinical microbiology and clinical chemistry.\n"
-    "👈 Select an analysis type in the sidebar, then upload your data or paste it directly.\n":
-        "\n## Metodjämförelse\n\nEtt enkelt verktyg för att jämföra två "
-        "analysmetoder inom klinisk mikrobiologi och klinisk kemi.\n"
-        "👈 Välj analys i menyn till vänster och ladda sedan upp eller klistra in dina data.\n",
 
-    "\n**📈 Passing–Bablok**\nNon-parametric regression — resistant to outliers, "
-    "no assumptions about error distribution.\nSlope, intercept and 95 % confidence "
-    "intervals via the rank-based method.\n":
-        "\n**📈 Passing–Bablok**\nIcke-parametrisk regression — tål extremvärden "
-        "och kräver inga antaganden om felens fördelning.\nLutning, intercept och "
-        "95 % konfidensintervall med rangbaserad metod.\n",
 
-    "\n**📉 Deming regression**\nAccounts for measurement error in both methods.\n"
-    "Ordinary (equal variances) or weighted (proportional CV, Linnet 1990).\n"
-    "Confidence intervals via jackknife resampling.\n":
-        "\n**📉 Deming-regression**\nTar hänsyn till mätfel i båda metoderna.\n"
-        "Oviktad (lika varians) eller viktad (proportionell CV, Linnet 1990).\n"
-        "Konfidensintervall med jackknife.\n",
 
-    "\n**🔢 Confusion matrix**\nZone diameter agreement grid for disk diffusion "
-    "comparison.\nEssential agreement (±1/±2 mm), categorical agreement, VME and ME.\n"
-    "EUCAST and CLSI breakpoints supported.\n":
-        "\n**🔢 Konfusionsmatris**\nRutnät för överensstämmelse mellan zondiametrar "
-        "vid diskdiffusion.\nEssential agreement (±1/±2 mm), kategoriöverensstämmelse, "
-        "VME och ME.\nBrytpunkter enligt EUCAST och CLSI.\n",
 
-    "\n**🔬 Precision Evaluation (EP15-A3)**\nWithin-run (repeatability) and "
-    "within-laboratory (total) SD and CV.\nChi-square verification against "
-    "manufacturer claims.\nBased on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.\n":
-        "\n**🔬 Precisionsvärdering (EP15-A3)**\nInomserieprecision (repeterbarhet) "
-        "och totalimprecision som SD och CV.\nVerifiering mot tillverkarens påstående "
-        "med chi-två-test.\nEnligt CLSI EP15-A3 (2014) — 5 replikat × 5 dagar rekommenderas.\n",
 
-    "**📄 Expected data format**": "**📄 Förväntat dataformat**",
-    "**📚 Key references**": "**📚 Viktiga referenser**",
     "**Example output:**": "**Exempel på resultat:**",
 
-    "At least two numeric columns — one per method. Extra columns (species, "
+    "At least two numeric columns, one per method. Extra columns (species, "
     "antibiotic, lab) can be used to filter rows.":
-        "Minst två numeriska kolumner — en per metod. Ytterligare kolumner "
+        "Minst två numeriska kolumner, en per metod. Ytterligare kolumner "
         "(art, antibiotikum, laboratorium) kan användas för att filtrera rader.",
     "Accepted: Excel (.xlsx/.xls), CSV, or paste from Excel. Comma or point "
     "as decimal. Header row optional.":
@@ -334,17 +302,24 @@ SV = {
         "Kolumnrubrikerna blir dagbeteckningar. Komma eller punkt som decimaltecken.",
 
     # --- Meddelanden ----------------------------------------------------------
-    "### 🔒 Method Comparison Tool": "### 🔒 Metodjämförelse",
-    "Upload or paste precision data in the main area →":
-        "Ladda upp eller klistra in precisionsdata i huvudfönstret →",
+    "### Method Comparison": "### Metodjämförelse",
+    "Automatic size: **{w}×{h} px** at **{d} dpi**, about 18 × 13 cm.":
+        "Automatisk storlek: **{w}×{h} px** vid **{d} dpi**, ungefär 18 × 13 cm.",
+    "Analysis failed: {e}": "Analysen misslyckades: {e}",
+    "Could not build the matrix: {e}": "Kunde inte skapa matrisen: {e}",
+    "Could not interpret the data: {e}": "Kunde inte tolka data: {e}",
+    "The precision calculation failed: {e}": "Precisionsberäkningen misslyckades: {e}",
+    "Excel export is not available: {e}": "Excelexporten är inte tillgänglig: {e}",
+    "Upload or paste the precision data in the main area.":
+        "Ladda upp eller klistra in precisionsdata i huvudfönstret.",
     "Choose a data source above to begin the precision analysis.":
         "Välj en datakälla ovan för att påbörja precisionsanalysen.",
-    "👈 Paste your data in the sidebar to get started.":
-        "👈 Klistra in dina data i menyn för att komma igång.",
-    "👈 Upload both files and configure the column mapping in the sidebar.":
-        "👈 Ladda upp båda filerna och välj kolumner i menyn.",
-    "⚠️ No matched pairs — check column mapping.":
-        "⚠️ Inga matchade par — kontrollera kolumnvalen.",
+    "Paste your data in the sidebar to get started.":
+        "Klistra in dina data i menyn för att komma igång.",
+    "Upload both files and configure the column mapping in the sidebar.":
+        "Ladda upp båda filerna och välj kolumner i menyn.",
+    "No matched pairs. Check the column mapping.":
+        "Inga matchade par. Kontrollera kolumnvalen.",
     "Need at least 2 days of data.": "Minst 2 dagar krävs.",
     "Need at least 2 replicates per day.": "Minst 2 replikat per dag krävs.",
 
@@ -356,12 +331,12 @@ SV = {
         "Lämna 0 för att hoppa över.",
     "**Chi-square verification (EP15-A3 §2.4.3)**":
         "**Chi-två-verifiering (EP15-A3 §2.4.3)**",
-    "Journal-style precision table — days as rows, replicates as columns, "
+    "Journal-style precision table: days as rows, replicates as columns, "
     "precision summary in footer:":
-        "Precisionstabell i tidskriftsformat — dagar som rader, replikat som "
+        "Precisionstabell i tidskriftsformat: dagar som rader, replikat som "
         "kolumner, precisionsmått i fotraden:",
-    "ℹ️ Why does this differ from the CLSI value?":
-        "ℹ️ Varför skiljer sig detta från CLSI-värdet?",
+    "Why does this differ from the CLSI value?":
+        "Varför skiljer sig detta från CLSI-värdet?",
     "Upload a long-format file with **SampleID | Analysis | Result** columns. "
     "Search for a Sample ID and split results into days automatically.":
         "Ladda upp en fil i långt format med kolumnerna **Prov-ID | Analys | "
@@ -371,7 +346,7 @@ SV = {
     "Konfidensgrad": "Konfidensgrad",
     "Positivt utfall": "Positivt utfall",
     "Negativt utfall": "Negativt utfall",
-    "ℹ️ Tolkning": "ℹ️ Tolkning",
+    "Tolkning": "Tolkning",
     # --- Acceptanskriterier (konfusionsmatris) --------------------------------
     "\n| Metric | EUCAST | CLSI |\n|---|---|---|\n"
     "| Essential Agreement \u00b12 mm | \u2265 90 % | \u2265 90 % |\n"
@@ -391,7 +366,7 @@ SV = {
     "(s\u00b2day = {a}) is smaller than what within-run noise alone "
     "would produce (S\u00b2r/n = {b}), so the negative variance "
     "component is truncated to zero (CLSI EP15-A3). It usually "
-    "means there is no detectable day-to-day effect \u2014 check that "
+    "means there is no detectable day-to-day effect. Check that "
     "your days are grouped correctly.":
         "**Variationen mellan dagar skattas till noll**, d\u00e4rf\u00f6r blir "
         "inomserieprecisionen och totalimprecisionen identiska. Detta \u00e4r "
@@ -399,8 +374,8 @@ SV = {
         "dagarnas medelv\u00e4rden (s\u00b2dag = {a}) \u00e4r mindre \u00e4n vad slumpen "
         "inom serien ensam ger upphov till (S\u00b2r/n = {b}). Den negativa "
         "varianskomponenten s\u00e4tts d\u00e5 till noll enligt CLSI EP15-A3. "
-        "Det betyder oftast att ingen m\u00e4tbar dageffekt finns \u2014 "
-        "kontrollera att dagindelningen \u00e4r korrekt.",
+        "Det betyder oftast att ingen m\u00e4tbar dageffekt finns. "
+        "Kontrollera att dagindelningen \u00e4r korrekt.",
     # --- Fyrfältstabell (femte analysen) --------------------------------------
     "Fourfold table (qualitative)": "Fyrfältstabell (kvalitativ)",
     "2×2 table for positive/negative methods":
@@ -424,7 +399,7 @@ SV = {
     "neither method is a gold standard (CLSI EP12-A2).":
         "PPA/NPA redovisas. Sensitivitet får inte hävdas när ingen "
         "metod är facit (CLSI EP12-A2).",
-    "⚖️ Cut-off values": "⚖️ Beslutsgränser",
+    "Cut-off values": "Beslutsgränser",
     "Fill in if the data are quantitative and need splitting into "
     "positive/negative. Leave blank if the data are already "
     "positive/negative.":
@@ -434,7 +409,7 @@ SV = {
     "Cut-off candidate": "Gräns kandidat",
     "Positive is defined as a value ≥ the cut-off.":
         "Positivt definieras som värde ≥ gränsen.",
-    "🏷️ Result labels": "🏷️ Benämningar",
+    "Result labels": "Benämningar",
     "Positive result": "Positivt utfall",
     "Negative result": "Negativt utfall",
     "Confidence level": "Konfidensgrad",
@@ -443,8 +418,8 @@ SV = {
         "Data är kvantitativa. Ange beslutsgränser i menyn under "
         "**Beslutsgränser** för att dela upp i positiv/negativ.",
     "Could not build the table": "Kunde inte bygga tabellen",
-    "⚠️ Points to consider": "⚠️ Att beakta",
-    "ℹ️ Interpretation": "ℹ️ Tolkning",
+    "Points to consider": "Att beakta",
+    "Interpretation": "Tolkning",
 
     # Mått
     "Sensitivity": "Sensitivitet",
@@ -477,37 +452,36 @@ SV = {
     "True negative": "Sant negativ",
     "Green = agreement": "Grön = överensstämmelse",
     "Red = disagreement": "Röd = avvikelse",
-    "Points to consider": "Att beakta",
 
     # Tolkningstexten
-    "\n**Which measures apply** \u2014 if neither method can be considered a gold\n"
+    "\n**Which measures apply.** If neither method can be considered a gold\n"
     "standard, sensitivity and specificity may not be claimed. Positive and\n"
     "negative percent agreement (PPA/NPA) are reported instead. This is the\n"
     "explicit recommendation of CLSI EP12-A2 and the FDA.\n\n"
-    "**Confidence intervals** \u2014 calculated with the Wilson score method, which\n"
+    "**Confidence intervals** are calculated with the Wilson score method, which\n"
     "gives sensible limits even at 0 % and 100 % where the ordinary method\n"
     "fails. The width reflects how many samples were included, not how good\n"
     "the method is.\n\n"
-    "**Cohen's kappa** \u2014 agreement corrected for that which arises by chance\n"
+    "**Cohen's kappa** measures agreement corrected for that which arises by chance\n"
     "alone. The interpretation thresholds are arbitrary conventions.\n\n"
-    "**McNemar test** \u2014 tests whether the disagreements are systematically\n"
+    "**McNemar's test** checks whether the disagreements are systematically\n"
     "skewed, that is whether one method more often gives a positive result\n"
     "than the other. Only the discordant cells contribute. A low p-value means\n"
     "a systematic difference, not necessarily a clinically important one.\n\n"
     "**Predictive values** apply only at the prevalence of the material\n"
     "examined and cannot be transferred to a population with a different\n"
     "prevalence.\n":
-        "\n**Vilka mått som gäller** \u2014 om ingen av metoderna kan anses utgöra\n"
+        "\n**Vilka mått som gäller.** Om ingen av metoderna kan anses utgöra\n"
         "facit får sensitivitet och specificitet inte hävdas. Då redovisas\n"
         "positiv och negativ procentuell överensstämmelse (PPA/NPA). Detta är\n"
         "CLSI EP12-A2:s och FDA:s uttryckliga rekommendation.\n\n"
-        "**Konfidensintervall** \u2014 beräknade med Wilsons score-metod, som ger\n"
+        "**Konfidensintervall** beräknas med Wilsons score-metod, som ger\n"
         "rimliga gränser även vid 0 % och 100 % där den vanliga metoden\n"
         "misslyckas. Bredden speglar hur många prov som ingår, inte hur bra\n"
         "metoden är.\n\n"
-        "**Cohens kappa** \u2014 överensstämmelse korrigerad för den som uppstår\n"
+        "**Cohens kappa** mäter överensstämmelse korrigerad för den som uppstår\n"
         "av en ren slump. Gränserna för tolkning är godtyckliga konventioner.\n\n"
-        "**McNemars test** \u2014 prövar om avvikelserna är systematiskt\n"
+        "**McNemars test** prövar om avvikelserna är systematiskt\n"
         "snedfördelade, det vill säga om den ena metoden oftare ger positivt\n"
         "än den andra. Endast de diskordanta cellerna bidrar. Ett lågt\n"
         "p-värde innebär en systematisk skillnad, inte nödvändigtvis en\n"
@@ -520,7 +494,7 @@ SV = {
     "Password": "Lösenord",
     "Log in": "Logga in",
     "Incorrect password.": "Fel lösenord.",
-    "🔒 Data protection": "🔒 Dataskydd",
+    "Data protection": "Dataskydd",
     "The application runs locally on this computer. No data is sent "
     "anywhere and the application stores nothing itself.\n\n"
     "Do not upload data that can be traced back to an individual "
@@ -532,8 +506,8 @@ SV = {
         "patient. Använd avidentifierade prov-ID och relativa dagnummer "
         "i stället för datum.",
     # --- Dataskydd per driftmiljö ---------------------------------------------
-    "☁️ Web version — use anonymised or simulated data only.":
-        "☁️ Webbversion — använd endast avidentifierade eller simulerade data.",
+    "Web version: use anonymised or simulated data only.":
+        "Webbversion: använd endast avidentifierade eller simulerade data.",
     "This web version runs on Streamlit Community Cloud, a public "
     "service operated by a US company. Files you upload are sent "
     "to and processed on servers outside the EU/EEA. The "
@@ -583,8 +557,6 @@ SV = {
         'Fyrfältsinställningar',
     'Precision options':
         'Precisionsinställningar',
-    'Method Comparison':
-        'Metodjämförelse',
     'Confusion Matrix':
         'Konfusionsmatris',
     'Precision Evaluation (EP15-A3)':
@@ -597,14 +569,14 @@ SV = {
         'Referens',
     'Candidate':
         'Kandidat',
-    '📊 Download fourfold table (Excel)':
-        '📊 Ladda ner fyrfältstabell (Excel)',
-    '📥 Results (CSV)':
-        '📥 Resultat (CSV)',
-    'Preview — {r} replicates × {d} days (all rows shown):':
-        'Förhandsvisning — {r} replikat × {d} dagar (alla rader visas):',
-    'Preview — {n} rows for this sample:':
-        'Förhandsvisning — {n} rader för detta prov:',
+    'Download fourfold table (Excel)':
+        'Ladda ner fyrfältstabell (Excel)',
+    'Results (CSV)':
+        'Resultat (CSV)',
+    'Preview: {r} replicates × {d} days (all rows shown):':
+        'Förhandsvisning: {r} replikat × {d} dagar (alla rader visas):',
+    'Preview: {n} rows for this sample:':
+        'Förhandsvisning: {n} rader för detta prov:',
     'WITHIN-RUN (REPEATABILITY)':
         'INOMSERIEPRECISION (REPETERBARHET)',
     'Protocol: CLSI EP15-A3':
@@ -615,8 +587,8 @@ SV = {
         'eff. frihetsgrader',
     'Includes between-day variation':
         'Inkluderar variation mellan dagar',
-    'TOTAL IMPRECISION — SIMPLE POOLED CALCULATION (all {nm} results as one set)':
-        'TOTALIMPRECISION — ENKEL SAMMANSLAGEN BERÄKNING (alla {nm} resultat som ett material)',
+    'TOTAL IMPRECISION, SIMPLE POOLED CALCULATION (all {nm} results as one set)':
+        'TOTALIMPRECISION, ENKEL SAMMANSLAGEN BERÄKNING (alla {nm} resultat som ett material)',
     'ordinary SD of every measurement, day structure ignored':
         'vanlig SD över alla mätningar, dagindelningen ignoreras',
     'Within-run (repeatability)':
@@ -625,10 +597,10 @@ SV = {
         'Totalimprecision (inom laboratoriet)',
     'Simple pooled (all results)':
         'Enkel sammanslagning (alla resultat)',
-    'Manufacturer claim — repeatability':
-        'Tillverkarens påstående — repeterbarhet',
-    'Manufacturer claim — within-laboratory':
-        'Tillverkarens påstående — totalimprecision',
+    'Manufacturer claim: repeatability':
+        'Tillverkarens påstående: repeterbarhet',
+    'Manufacturer claim: within-laboratory':
+        'Tillverkarens påstående: totalimprecision',
     'ᵃ Within-run SD (Sᵣ) = {sd}, CV% = {cv} (df = {df}; CLSI EP15-A3).':
         'ᵃ Inomserie-SD (Sᵣ) = {sd}, CV% = {cv} (frihetsgrader = {df}; CLSI EP15-A3).',
     'ᵇ Within-laboratory SD (Sₗ) = {sd}, CV% = {cv} (effective df = {df}; includes between-day variation).':
@@ -691,7 +663,7 @@ SV = {
         'McNemars test prövar om metoderna skiljer sig systematiskt åt; endast diskordanta par bidrar.',
     "Cohen's kappa describes agreement corrected for chance.":
         'Cohens kappa beskriver överensstämmelse korrigerad för slumpen.',
-    '✅ Parsed {n} rows.': '✅ {n} rader inlästa.',
+    'Parsed {n} rows.': '{n} rader inlästa.',
     'Minor errors: {n} ({p} %)': 'Mindre fel: {n} ({p} %)',
     'Count:': 'Antal:',
     'Mean:': 'MV:',
@@ -722,8 +694,8 @@ SV = {
     'Observed SD': 'Observerad SD',
     'Verification value': 'Verifieringsvärde',
     'Verdict': 'Utfall',
-    '✅  PASS': '✅  GODKÄND',
-    '❌  FAIL': '❌  UNDERKÄND',
+    'Pass': 'Godkänd',
+    'Fail': 'Ej godkänd',
     # --- Filinläsning v2.1 ---
     'Header row': 'Rubrikrad',
     'Automatic': 'Automatisk',
@@ -740,17 +712,17 @@ SV = {
     'UTF-8 with BOM': 'UTF-8 med BOM',
     'Analysis in file A': 'Analys i fil A',
     'Analysis in file B': 'Analys i fil B',
-    'No matching analysis name found in file B — choose it manually.': 'Ingen motsvarande analys hittades i fil B — välj den manuellt.',
-    'Suggested pairing: {a} ↔ {b} — please check.': 'Föreslagen koppling: {a} ↔ {b} — kontrollera.',
+    'No matching analysis name found in file B. Choose it manually.': 'Ingen motsvarande analys hittades i fil B. Välj den manuellt.',
+    'Suggested pairing: {a} ↔ {b}. Please check.': 'Föreslagen koppling: {a} ↔ {b}. Kontrollera.',
     'The file without an analysis column contains only one analysis (repeated sample IDs are reruns)': 'Filen utan analyskolumn innehåller bara en analys (upprepade prov-ID är omkörningar)',
-    '⚙️ Matching options': '⚙️ Matchningsinställningar',
+    'Matching options': 'Matchningsinställningar',
     'Ignore leading zeros in numeric sample IDs': 'Bortse från ledande nollor i numeriska prov-ID',
     'Excel removes leading zeros, so 0012345 in one file and 12345 in the other are treated as the same sample.': 'Excel tar bort ledande nollor, så 0012345 i den ena filen och 12345 i den andra behandlas som samma prov.',
-    '⚠️ Repeated results (reruns): file A {a} samples, file B {b} samples.': '⚠️ Upprepade resultat (omkörningar): fil A {a} prov, fil B {b} prov.',
+    'Repeated results (reruns): file A {a} samples, file B {b} samples.': 'Upprepade resultat (omkörningar): fil A {a} prov, fil B {b} prov.',
     'Samples with repeated results in file {f}: {ids}': 'Prov med upprepade resultat i fil {f}: {ids}',
     'Keep first valid': 'Behåll första giltiga',
     'Keep last valid': 'Behåll sista giltiga',
-    '✅ {m} samples matched · {u} pairs used': '✅ {m} prov matchade · {u} par används',
+    '{m} samples matched · {u} pairs used': '{m} prov matchade · {u} par används',
     'Only in A: {a}  |  Only in B: {b}': 'Endast i A: {a}  |  Endast i B: {b}',
     '{n} matched samples not used:': '{n} matchade prov används inte:',
     'below measuring range': 'under mätområdet',
@@ -760,19 +732,19 @@ SV = {
     'File {f}: {n} sample IDs are in scientific notation (e.g. 2,40915E+09) and cannot be matched. Export the IDs as text.': 'Fil {f}: {n} prov-ID är i vetenskaplig notation (t.ex. 2,40915E+09) och kan inte matchas. Exportera prov-ID som text.',
     "File {f}: {n} results such as 1,234 could be either a decimal or a thousands separator; read with decimal '{d}'. Check the values.": "Fil {f}: {n} resultat som 1,234 kan vara både decimal- och tusentalsavgränsare; lästa med decimaltecken '{d}'. Kontrollera värdena.",
     'File {f}: the result column mixes decimal comma and decimal point; each value was read by its own format. Check the values.': 'Fil {f}: resultatkolumnen blandar decimalkomma och decimalpunkt; varje värde lästes efter sitt eget format. Kontrollera värdena.',
-    '🔎 How the values were read': '🔎 Så tolkades värdena',
+    'How the values were read': 'Så tolkades värdena',
     'Several results per sample ID but no analysis column is selected, so results cannot be paired safely. Choose the analysis column, or confirm that the file contains only one analysis.': 'Flera resultat per prov-ID men ingen analyskolumn är vald, så resultaten kan inte paras säkert. Välj analyskolumnen, eller bekräfta att filen bara innehåller en analys.',
     'Matching error': 'Fel vid matchning',
-    '⚠️ {n} result(s) not used: the calculation requires the same number of replicates every day, so each day was limited to its first {m} results. They are marked in the raw data.': '⚠️ {n} resultat används inte: beräkningen kräver lika många replikat varje dag, så varje dag begränsades till sina {m} första resultat. De är markerade i rådata.',
-    '⚠️ {n} trailing result(s) excluded (incomplete day).': '⚠️ {n} resultat i slutet uteslutna (ofullständig dag).',
-    '✅ {d} days × {r} replicates ready.': '✅ {d} dagar × {r} replikat klara.',
+    '{n} result(s) not used: the calculation requires the same number of replicates every day, so each day was limited to its first {m} results. They are marked in the raw data.': '{n} resultat används inte: beräkningen kräver lika många replikat varje dag, så varje dag begränsades till sina {m} första resultat. De är markerade i rådata.',
+    '{n} trailing result(s) excluded (incomplete day).': '{n} resultat i slutet uteslutna (ofullständig dag).',
+    '{d} days × {r} replicates ready.': '{d} dagar × {r} replikat klara.',
     'Error': 'Fel',
-    '🗑 Excluded points ({n})': '🗑 Uteslutna punkter ({n})',
+    'Excluded points ({n})': 'Uteslutna punkter ({n})',
     'These files differ from validated version {v}: {f}. Results are not covered by the validation until it is repeated.':
         'Dessa filer skiljer sig från validerad version {v}: {f}. Resultaten omfattas inte av valideringen förrän den upprepats.',
     'The settings file .streamlit/config.toml is missing. Calculations are not affected, but default settings apply: 200 MB upload limit, and usage statistics are sent to Streamlit.':
         'Inställningsfilen .streamlit/config.toml saknas. Beräkningarna påverkas inte, men standardinställningar gäller: uppladdningsgräns 200 MB, och användningsstatistik skickas till Streamlit.',
-    '🛈 System status': '🛈 Systemstatus',
+    'System status': 'Systemstatus',
     '✓ The installation matches validated version {v}.': '✓ Installationen stämmer med validerad version {v}.',
     'No manifest.json found; the installation cannot be checked.': 'manifest.json saknas; installationen kan inte kontrolleras.',
     'Differs from the validated version: {f}': 'Skiljer sig från den validerade versionen: {f}',
@@ -791,8 +763,8 @@ SV = {
     'wide, {n} analyses': 'brett, {n} analyser',
     'long': 'långt',
     '{n} summary rows ignored ({ex}).': '{n} summarader ignorerades ({ex}).',
-    'The results in file B are about {f} times those in file A. Check the units (e.g. g/L against g/dL); a conversion factor can be set under ⚙️ Matching options.': 'Resultaten i fil B är ungefär {f} gånger resultaten i fil A. Kontrollera enheterna (t.ex. g/L mot g/dL); en omräkningsfaktor kan anges under ⚙️ Matchningsinställningar.',
-    '📋 All analyses in the files': '📋 Alla analyser i filerna',
+    'The results in file B are about {f} times those in file A. Check the units (e.g. g/L against g/dL); a conversion factor can be set under Matching options.': 'Resultaten i fil B är ungefär {f} gånger resultaten i fil A. Kontrollera enheterna (t.ex. g/L mot g/dL); en omräkningsfaktor kan anges under Matchningsinställningar.',
+    'All analyses in the files': 'Alla analyser i filerna',
     '{n} analyses in file A have a matching analysis in file B. Check the pairing, then run the overview with the current method ({m}).': '{n} analyser i fil A har en motsvarande analys i fil B. Kontrollera kopplingen och kör sedan översikten med vald metod ({m}).',
     'Include': 'Ta med',
     'Analysis A': 'Analys A',
@@ -802,9 +774,9 @@ SV = {
     'normalised': 'normaliserad',
     'similar': 'liknande',
     'manual': 'manuell',
-    '▶ Run overview': '▶ Kör översikt',
+    'Run overview': 'Kör översikt',
     'Method: {m}': 'Metod: {m}',
-    '📊 Download overview (Excel)': '📊 Ladda ner översikt (Excel)',
+    'Download overview (Excel)': 'Ladda ner översikt (Excel)',
     'Overview': 'Översikt',
     'Pairs used': 'Par som används',
     'Not used': 'Används ej',
@@ -820,5 +792,74 @@ SV = {
     'unit difference ×{f}?': 'enhetsskillnad ×{f}?',
     'fewer than {n} pairs': 'färre än {n} par',
     'Could not match files': 'Kunde inte matcha filerna',
-    'Only {n} matched pair(s) — need at least 3 for regression.': 'Endast {n} matchade par — minst 3 behövs för regression.',
+    'Only {n} matched pair(s). At least 3 are needed for regression.': 'Endast {n} matchade par. Minst 3 behövs för regression.',
+    # --- v2.2.2: ny startsida, inga emojier, meddelanden som tidigare var oöversatta ---
+    "Laboratory Medicine, Region Västmanland": "Laboratoriemedicin, Region Västmanland",
+    "Compare two measurement methods or instruments run on the same samples. Choose an "
+    "analysis in the menu on the left, then upload a file or paste data copied from Excel.":
+        "Jämför två mätmetoder eller instrument som analyserat samma prover. Välj analys i "
+        "menyn till vänster och ladda sedan upp en fil eller klistra in data som du kopierat "
+        "från Excel.",
+    """
+| Analysis | Use it when |
+|---|---|
+| **Passing–Bablok** | You compare two quantitative methods. Little affected by outliers and makes no assumptions about how the errors are distributed. Slope and intercept with 95 % confidence intervals. |
+| **Deming** | The measurement error of both methods is known. Weighted Deming when the CV is constant over the measuring range (Linnet 1990). Confidence intervals by jackknife. |
+| **Bland–Altman** | Shown together with both regressions: mean difference and limits of agreement. |
+| **Confusion matrix** | You compare zone diameters from two reading methods. Essential and categorical agreement, VME and ME, with EUCAST or CLSI breakpoints. |
+| **Precision** | You verify the manufacturer's repeatability and within-laboratory imprecision according to CLSI EP15-A3, normally 5 replicates on 5 days. |
+| **Fourfold table** | The results are qualitative (positive/negative). Sensitivity and specificity, or PPA and NPA when neither method is the reference. |
+""": """
+| Analys | Används när |
+|---|---|
+| **Passing–Bablok** | Du jämför två kvantitativa metoder. Påverkas lite av extremvärden och kräver inga antaganden om hur felen är fördelade. Lutning och intercept med 95 % konfidensintervall. |
+| **Deming** | Mätfelet i båda metoderna är känt. Viktad Deming när CV är konstant över mätområdet (Linnet 1990). Konfidensintervall med jackknife. |
+| **Bland–Altman** | Visas tillsammans med båda regressionerna: medelskillnad och överensstämmelsegränser. |
+| **Konfusionsmatris** | Du jämför zondiametrar från två avläsningsmetoder. Essential agreement, kategoriöverensstämmelse, VME och ME med brytpunkter enligt EUCAST eller CLSI. |
+| **Precision** | Du verifierar tillverkarens uppgifter om repeterbarhet och totalimprecision enligt CLSI EP15-A3, normalt 5 replikat under 5 dagar. |
+| **Fyrfältstabell** | Resultaten är kvalitativa (positiv/negativ). Sensitivitet och specificitet, eller PPA och NPA när ingen av metoderna är facit. |
+""",
+    "Exports from two instruments with many analyses? Choose Passing–Bablok or Deming and "
+    "two files in step 2. Samples are matched on sample ID, and all analyses can be "
+    "compared in one run.":
+        "Har du exporter från två instrument med många analyser? Välj Passing–Bablok eller "
+        "Deming och två filer i steg 2. Proven matchas på prov-ID och alla analyser kan "
+        "jämföras i en körning.",
+    "#### Data format": "#### Dataformat",
+    "#### References": "#### Referenser",
+    """
+- Passing H, Bablok W. *J Clin Chem Clin Biochem* 1983;21:709–20. [doi](https://doi.org/10.1515/cclm.1983.21.11.709)
+- Linnet K. *Stat Med* 1990;9:1463–73. [doi](https://doi.org/10.1002/sim.4780091210)
+- Bland JM, Altman DG. *Lancet* 1986;1:307–10. [doi](https://doi.org/10.1016/S0140-6736(86)90837-8)
+- Chesher D. *Clin Biochem Rev* 2008;29 Suppl 1:S23–6. [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC2556577/)
+- CLSI EP15-A3. User verification of precision and estimation of bias. 2014.
+- CLSI EP09c. Measurement procedure comparison and bias estimation using patient samples. 2018.
+- CLSI M52. Verification of commercial microbial identification and AST systems. 2015.
+- EUCAST. Disk diffusion method for antimicrobial susceptibility testing, v10.0. [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
+""": """
+- Passing H, Bablok W. *J Clin Chem Clin Biochem* 1983;21:709–20. [doi](https://doi.org/10.1515/cclm.1983.21.11.709)
+- Linnet K. *Stat Med* 1990;9:1463–73. [doi](https://doi.org/10.1002/sim.4780091210)
+- Bland JM, Altman DG. *Lancet* 1986;1:307–10. [doi](https://doi.org/10.1016/S0140-6736(86)90837-8)
+- Chesher D. *Clin Biochem Rev* 2008;29 Suppl 1:S23–6. [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC2556577/)
+- CLSI EP15-A3. User verification of precision and estimation of bias. 2014.
+- CLSI EP09c. Measurement procedure comparison and bias estimation using patient samples. 2018.
+- CLSI M52. Verification of commercial microbial identification and AST systems. 2015.
+- EUCAST. Disk diffusion method for antimicrobial susceptibility testing, v10.0. [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
+""",
+    " … (+{n} more)": " … (+{n} till)",
+    "Using **{k}** of {n} rows. Filter on {c}: {p}": "Använder **{k}** av {n} rader. Filter på {c}: {p}",
+    "Only {n} point(s) remain. At least 3 are needed, so restore some points below.":
+        "Endast {n} punkter återstår. Minst 3 behövs, så återställ några punkter nedan.",
+    "**{n} point(s) excluded.** Statistics and both plots use the remaining {k} of {N}.":
+        "**{n} punkter uteslutna.** Statistiken och båda diagrammen bygger på återstående {k} av {N}.",
+    "Analyte: **{a}**. Sheet 1: matched pairs marked as included or excluded. "
+    "Sheet 2: only in {la}. Sheet 3: only in {lb}.":
+        "Analys: **{a}**. Blad 1: matchade par markerade som använda eller uteslutna. "
+        "Blad 2: endast i {la}. Blad 3: endast i {lb}.",
+    "Automatic size: **{w}×{w} px** at **{d} dpi**, each cell 6 mm when printed.":
+        "Automatisk storlek: **{w}×{w} px** vid **{d} dpi**, varje cell 6 mm i utskrift.",
+    "If your file has a date column, grouping by it is safer, because the number of "
+    "replicates per day can differ between analytes.":
+        "Om filen har en datumkolumn är det säkrare att gruppera på den, eftersom antalet "
+        "replikat per dag kan skilja mellan analyser.",
 }

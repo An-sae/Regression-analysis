@@ -24,7 +24,7 @@ def run(lang):
                       UI_FILE_B=os.path.join(ROOT, "data/demo/Sysmex_XN-2000_radata.xlsx"))
     at = AppTest.from_function(app_with_files, default_timeout=300)
     at.session_state["_lang"] = lang; at.run()
-    at.radio(key="lf_mode").set_value("Two long-format files (match by ID)").run()
+    at.radio(key="lf_mode").set_value("Two files (match by sample ID)").run()
     return at
 
 
@@ -73,7 +73,7 @@ print("\n2) Engelska")
 at = run("en"); T = texts(at)
 check("inga undantag", not at.exception, [e.value for e in at.exception])
 check("engelsk formatbeskrivning 'wide, 11 analyses'", sum("wide, 11 analyses" in x for x in T) >= 2, T)
-own = [x for x in T if any(c in re.sub(r"\([^)]*\)", "", x) for c in "åäöÅÄÖ")]
+own = [x for x in T if any(c in re.sub(r"\([^)]*\)", "", x.replace("Västmanland", "")) for c in "åäöÅÄÖ")]   # ortnamn tillåtet
 check("inga svenska texter", not own, own)
 
 print(f"\n{'ALLA GODKÄNDA' if not fails else f'{fails} FEL'}")

@@ -108,7 +108,7 @@ ys[7] = ys[7] + 60                                          # tydlig avvikare
 paste = "\n".join(f"{a}\t{b}".replace(".", ",") for a, b in zip(xs, ys))
 at = AppTest.from_file(_os.path.join(_ROOT, "app.py"), default_timeout=180)
 at.session_state["_lang"] = "sv"; at.run()
-at.radio(key="imode").set_value("📋 Paste data").run()
+at.radio(key="imode").set_value("Paste data").run()
 at.text_area(key="pa").input(paste).run()
 at.slider(key="dec").set_value(6).run()                  # 6 decimaler i tabellen
 [b.click().run() for b in at.button if "Analy" in (b.label or "")][:1]

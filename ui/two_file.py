@@ -44,7 +44,7 @@ def _columns(t, fl, df, layout_choice):
     cols = list(df.columns)
     L = detect_layout(df)
     layout = L["layout"] if layout_choice == "auto" else layout_choice
-    st.markdown(t(f"**Column mapping — File {fl}**"))
+    st.markdown(t(f"**Column mapping, file {fl}**"))
     if layout == "wide":
         id_col = st.selectbox(t("Sample ID"), cols,
                               index=_ix(cols, L["id_col"] or guess_column(cols, "id")),
@@ -73,9 +73,9 @@ def two_file_sidebar(t) -> dict:
     """Hela tvåfilsflödet i sidomenyn. Returnerar resultat och sammanhang."""
     out = dict(x=None, y=None, report=None, label_a="Method A", label_b="Method B",
                analyte="ALL", matched_xlsx=None, error=None, ctx=None)
-    st.markdown(t("**File A — Reference method**"))
+    st.markdown(t("**File A: reference method**"))
     uf_a = st.file_uploader(t("Upload reference file"), type=["csv", "xlsx", "xls", "txt"], key="lf_fa")
-    st.markdown(t("**File B — Candidate method**"))
+    st.markdown(t("**File B: candidate method**"))
     uf_b = st.file_uploader(t("Upload candidate file"), type=["csv", "xlsx", "xls", "txt"], key="lf_fb")
     if uf_a is None or uf_b is None:
         return out
@@ -86,7 +86,7 @@ def two_file_sidebar(t) -> dict:
                                "starts with instrument or title rows.")) == "Automatic"
         df_a, df_b = _read(t, uf_a, "A", auto), _read(t, uf_b, "B", auto)
 
-        with st.expander(t("⚙️ Matching options")):
+        with st.expander(t("Matching options")):
             lay_a = st.selectbox(t("Layout of file A"), list(LAYOUT_LBL), key="lf_lay_a",
                                  format_func=lambda v: t(LAYOUT_LBL[v]))
             lay_b = st.selectbox(t("Layout of file B"), list(LAYOUT_LBL), key="lf_lay_b",
@@ -127,9 +127,9 @@ def two_file_sidebar(t) -> dict:
                                     index=lst_b.index(sug) if sug in lst_b else 0,
                                     key=f"lf_analyte_b_{an_sel_a}")
             if an_sel_a and sug is None:
-                st.warning(t("No matching analysis name found in file B — choose it manually."))
+                st.warning(t("No matching analysis name found in file B. Choose it manually."))
             elif sug and why != "exact" and an_sel_b == sug:
-                st.caption(t("Suggested pairing: {a} ↔ {b} — please check.").format(a=an_sel_a, b=an_sel_b))
+                st.caption(t("Suggested pairing: {a} ↔ {b}. Please check.").format(a=an_sel_a, b=an_sel_b))
         single = False
         if an_a is None or an_b is None:
             single = st.checkbox(t("The file without an analysis column contains only one "
@@ -150,7 +150,7 @@ def two_file_sidebar(t) -> dict:
                 return len(first), list(first)
             n_a, ids_a = _samples(d_a, id_a)
             n_b, ids_b = _samples(d_b, id_b)
-            st.warning(t("⚠️ Repeated results (reruns): file A {a} samples, file B {b} samples.")
+            st.warning(t("Repeated results (reruns): file A {a} samples, file B {b} samples.")
                        .format(a=n_a, b=n_b))
             for fl, ids in (("A", ids_a), ("B", ids_b)):
                 if ids:
@@ -173,7 +173,7 @@ def two_file_sidebar(t) -> dict:
                           (an_sel_a or an_sel_b) if an_sel_a == an_sel_b or not (an_sel_a and an_sel_b)
                           else f"{an_sel_a} ↔ {an_sel_b}")
         _report_messages(t, s, factor)
-        with st.expander(t("🔎 How the values were read")):
+        with st.expander(t("How the values were read")):
             pv = rep[rep["Match"] == "Matched"][["SampleID", "Original A", out["label_a"],
                                                  "Original B", out["label_b"], "Note"]]
             st.dataframe(pv.sort_values("Note", ascending=False, kind="stable").head(200),
@@ -195,9 +195,9 @@ def two_file_sidebar(t) -> dict:
 
 def _report_messages(t, s, factor):
     if s["matched_ids"] == 0:
-        st.warning(t("⚠️ No matched pairs — check column mapping."))
+        st.warning(t("No matched pairs. Check the column mapping."))
     else:
-        st.success(t("✅ {m} samples matched · {u} pairs used").format(m=s["matched_ids"], u=s["used"]))
+        st.success(t("{m} samples matched · {u} pairs used").format(m=s["matched_ids"], u=s["used"]))
         st.caption(t("Only in A: {a}  |  Only in B: {b}").format(a=s["only_a"], b=s["only_b"]))
     if s["excluded"]:
         parts = []
@@ -212,7 +212,7 @@ def _report_messages(t, s, factor):
     if s.get("unit_factor") and (not factor or factor == 1.0):
         st.warning(t("The results in file B are about {f} times those in file A. Check the "
                      "units (e.g. g/L against g/dL); a conversion factor can be set under "
-                     "⚙️ Matching options.").format(f=f"{s['unit_factor']:g}".replace(".", ",")))
+                     "Matching options.").format(f=f"{s['unit_factor']:g}".replace(".", ",")))
     for fl in ("a", "b"):
         if s[f"sci_ids_{fl}"]:
             st.error(t("File {f}: {n} sample IDs are in scientific notation (e.g. 2,40915E+09) "
@@ -232,7 +232,7 @@ def overview_panel(t, ctx, method, error_ratio, weighted, decimals, stamp, tdf):
     """Huvudytan: jämför alla kopplade analyser i en körning."""
     if not ctx or ctx["an_a"] is None or ctx["an_b"] is None:
         return
-    with st.expander(t("📋 All analyses in the files"), expanded=False):
+    with st.expander(t("All analyses in the files"), expanded=False):
         pairs = suggested_pairs(ctx["A"], ctx["an_a"], ctx["B"], ctx["an_b"])
         st.caption(t("{n} analyses in file A have a matching analysis in file B. Check the "
                      "pairing, then run the overview with the current method ({m}).").format(
@@ -251,7 +251,7 @@ def overview_panel(t, ctx, method, error_ratio, weighted, decimals, stamp, tdf):
             hide_index=True, use_container_width=True, key="ov_map")
         chosen = [(r[t("Analysis A")], r[t("Analysis B")], "manual")
                   for _, r in edited.iterrows() if r[t("Include")]]
-        if st.button(t("▶ Run overview"), key="ov_run", disabled=not chosen):
+        if st.button(t("Run overview"), key="ov_run", disabled=not chosen):
             bar = st.progress(0.0)
             ov, det = compare_all(ctx["A"], ctx["B"], ctx["id_a"], ctx["id_b"], ctx["an_a"],
                                   ctx["an_b"], ctx["rs_a"], ctx["rs_b"], chosen, method=method,
@@ -276,7 +276,7 @@ def overview_panel(t, ctx, method, error_ratio, weighted, decimals, stamp, tdf):
                 lambda v: "; ".join(_t_note(p, t) for p in v.split("; ")) if v else v)
             st.caption(t("Method: {m}").format(m=t(m_used)))
             st.dataframe(tdf(show), hide_index=True, use_container_width=True)
-            st.download_button(t("📊 Download overview (Excel)"),
+            st.download_button(t("Download overview (Excel)"),
                                build_overview_excel(ov, det, t=t, decimals=decimals, stamp=stamp),
                                "oversikt_alla_analyser.xlsx",
                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

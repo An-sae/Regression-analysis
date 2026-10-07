@@ -84,7 +84,7 @@ except (ImportError, AttributeError, TypeError, SyntaxError) as _imp_err:
         + f"Tekniskt fel / Technical error: `{_imp_err}`")
     st.stop()
 
-st.set_page_config(page_title="Method Comparison Tool", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Method Comparison Tool", layout="wide")
 
 
 # ── Optional password protection ─────────────────────────────────────────────
@@ -101,11 +101,11 @@ def _check_password() -> bool:
     if st.session_state.get("_auth_ok"):
         return True
 
-    st.markdown(t("### 🔒 Method Comparison Tool"))
+    st.markdown(t("### Method Comparison"))
     st.caption(t("Enter password to continue."))
     with st.form("login", clear_on_submit=False):
         pw = st.text_input(t("Password"), type="password")
-        ok = st.form_submit_button("Logga in")
+        ok = st.form_submit_button(t("Log in"))
     if ok:
         # constant-time comparison
         import hmac
@@ -269,10 +269,10 @@ def _apply_filter(df, exclude_cols, key_prefix):
 
     st.markdown(t("**Filter rows (optional)**"))
     filter_col = st.selectbox(
-        t("Filter by column"), ["— no filter —"] + cat_cols,
+        t("Filter by column"), ["(no filter)"] + cat_cols,
         key=f"{key_prefix}_fcol",
     )
-    if filter_col == "— no filter —":
+    if filter_col == "(no filter)":
         return df
 
     unique_vals = sorted(df[filter_col].dropna().unique().tolist(), key=str)
@@ -283,7 +283,7 @@ def _apply_filter(df, exclude_cols, key_prefix):
         key=f"{key_prefix}_fval",
     )
     if not selected:
-        st.warning(t("No values selected — using all rows."))
+        st.warning(t("No values selected, so all rows are used."))
         return df
 
     filtered = df[df[filter_col].isin(selected)].copy()
@@ -291,8 +291,9 @@ def _apply_filter(df, exclude_cols, key_prefix):
     n_total  = len(df)
     preview  = ", ".join(str(v) for v in selected[:3])
     if len(selected) > 3:
-        preview += f" … (+{len(selected)-3} more)"
-    st.caption(f"Using **{n_kept}** of {n_total} rows — {filter_col}: {preview}")
+        preview += t(" … (+{n} more)").format(n=len(selected)-3)
+    st.caption(t("Using **{k}** of {n} rows. Filter on {c}: {p}").format(
+        k=n_kept, n=n_total, c=filter_col, p=preview))
     return filtered
 
 
@@ -313,6 +314,7 @@ def _read_csv(raw, hdr, xc, yc):
 
 # ── Safe defaults for all sidebar variables (must be before the sidebar block) ─
 _lf_mode="Single file (two columns)"
+input_mode="Upload file"; uploaded_file=pasted_text=None
 _lf_x_arr=_lf_y_arr=None
 _lf_report_df=None
 _lf_label_a="Method A"; _lf_label_b="Method B"
@@ -334,8 +336,17 @@ with st.sidebar:
             st.session_state.get("_lang", DEFAULT_LANG)),
         key="_lang_picker")
     st.session_state["_lang"] = LANGUAGES[_lang_name]
+    # Vid byte av språk byts alternativens etiketter (format_func=t). Webbläsaren
+    # tappar då markeringen i radioknappar och listor trots att valet finns kvar
+    # på servern. Att skriva tillbaka samma värde synkar visningen. [v2.2.2]
+    if st.session_state.get("_lang_shown", st.session_state["_lang"]) != st.session_state["_lang"]:
+        for _k in ("analysis_type", "lf_mode", "imode", "bps", "ff_conf", "pr_alpha",
+                   "pr_input", "lf_pr_hdr", "lf_pr_grpmode", "lf_hdr", "lf_lay_a",
+                   "lf_lay_b", "lf_dup"):
+            if _k in st.session_state:
+                st.session_state[_k] = st.session_state[_k]
+    st.session_state["_lang_shown"] = st.session_state["_lang"]
 
-    st.title(t("📊 Method Comparison"))
     if _inst_changed:
         st.warning(t("These files differ from validated version {v}: {f}. Results "
                      "are not covered by the validation until it is repeated.")
@@ -361,7 +372,7 @@ with st.sidebar:
     st.caption(t(_WHAT[analysis_type]))
 
     if analysis_type == "Deming":
-        with st.expander(t("⚙️ Deming options"), expanded=True):
+        with st.expander(t("Deming options"), expanded=True):
             deming_weighted = st.toggle(
                 t("Weighted Deming"), value=False, key="dw",
                 help="On: errors proportional to concentration (constant CV). "
@@ -376,19 +387,19 @@ with st.sidebar:
 
     _step(2, "Load your data")
     if analysis_type == "Precision Evaluation (EP15-A3)":
-        st.caption(t("Upload or paste precision data in the main area →"))
+        st.caption(t("Upload or paste the precision data in the main area."))
         _x_sid=_y_sid=_sid_err=None; uploaded_file=pasted_text=None
-        input_mode="📂 Upload file"
+        input_mode="Upload file"
     else:
         if analysis_type in ("Passing–Bablok","Deming"):
             _lf_mode=st.radio(t("Data format"),
-                ["Single file (two columns)","Two long-format files (match by ID)"],
+                ["Single file (two columns)","Two files (match by sample ID)"],
                 key="lf_mode",
                 help="Long-format: one file per method with SampleID | Analysis | Result columns.", format_func=t)
         # (else already defaulted above)
 
-        if _lf_mode=="Two long-format files (match by ID)":
-            input_mode="📂 Upload file"; uploaded_file=pasted_text=None
+        if _lf_mode=="Two files (match by sample ID)":
+            input_mode="Upload file"; uploaded_file=pasted_text=None
             _x_sid=_y_sid=None
             _tf = two_file_sidebar(t)                  # ui/two_file.py
             _lf_x_arr, _lf_y_arr, _lf_report_df = _tf["x"], _tf["y"], _tf["report"]
@@ -396,9 +407,9 @@ with st.sidebar:
             _lf_analyte, _lf_matched_xlsx = _tf["analyte"], _tf["matched_xlsx"]
             _sid_err, _lf_ctx = _tf["error"], _tf["ctx"]
         else:
-            input_mode=st.radio(t("Input method"),["📂 Upload file","📋 Paste data"],key="imode", format_func=t)
+            input_mode=st.radio(t("Input method"),["Upload file","Paste data"],key="imode", format_func=t)
             _x_sid=_y_sid=_sid_err=None; uploaded_file=pasted_text=None
-            if input_mode=="📂 Upload file":
+            if input_mode=="Upload file":
                 uploaded_file=st.file_uploader(t("Upload CSV or Excel"),type=["csv","xlsx","xls"],key="fup")
                 if uploaded_file is not None:
                     try:
@@ -504,7 +515,7 @@ with st.sidebar:
             help="Off: absolute difference (y − x). On: percentage of the mean.")
 
         # -- Titles ------------------------------------------------------------
-        with st.expander(t("🏷️ Titles")):
+        with st.expander(t("Titles")):
             pb_title = st.text_input(
                 t("Regression plot"), value="",
                 placeholder="Leave blank for automatic title", key="pbt")
@@ -513,7 +524,7 @@ with st.sidebar:
                 placeholder="Leave blank for automatic title", key="bat")
 
         # -- Axis ranges -------------------------------------------------------
-        with st.expander(t("📐 Axis ranges")):
+        with st.expander(t("Axis ranges")):
             st.caption(t("Leave any field blank for automatic scaling."))
             st.markdown(t("**Regression plot**"))
             _a=st.columns(2)
@@ -529,7 +540,7 @@ with st.sidebar:
             ba_y_max=_pa(_b[1].text_input(t("Y max"),"",key="byx"))
 
         # -- Colours -----------------------------------------------------------
-        with st.expander(t("🎨 Colours")):
+        with st.expander(t("Colours")):
             st.markdown(t("**Regression plot**"))
             _c1=st.columns(3)
             with _c1[0]:
@@ -555,7 +566,7 @@ with st.sidebar:
                 ba_color_loa=st.color_picker(t("LoA"),"#F97316",key="bcl")
 
         # -- Legend & annotation text -----------------------------------------
-        with st.expander(t("✏️ Legend & label text")):
+        with st.expander(t("Legend & label text")):
             st.markdown(t("**Regression plot**"))
             pb_legend_scatter   =st.text_input(t("Points"),   "Observations",     key="pls")
             pb_legend_identity  =st.text_input(t("Identity"), "Identity (y = x)", key="pli")
@@ -592,7 +603,7 @@ with st.sidebar:
             help="Draws the dotted boundary lines either side of the diagonal.")
 
         # -- Layout ------------------------------------------------------------
-        with st.expander(t("📐 Range & layout")):
+        with st.expander(t("Range & layout")):
             st.caption(t("Leave blank for automatic range."))
             _cc=st.columns(2)
             cm_x_min=_ca(_cc[0].text_input(t("X min"),"",placeholder="auto",key="cxn"))
@@ -604,19 +615,19 @@ with st.sidebar:
                                      value=True,key="cst")
 
         # -- Title -------------------------------------------------------------
-        with st.expander(t("🏷️ Title")):
+        with st.expander(t("Title")):
             cm_title=st.text_input(t("Matrix title"),
                 "Zone Diameter Comparison Matrix",key="ctt")
 
         # -- Colours -----------------------------------------------------------
-        with st.expander(t("🎨 Colours")):
+        with st.expander(t("Colours")):
             cm_base_color=st.color_picker(t("Matrix colour"),"#1D4ED8",key="cbc")
             cm_scale_max =st.slider(t("Coloured bands (mm from diagonal)"),
                 1,10,2,key="csc",
                 help="How far from perfect agreement the shading extends.")
 
         # -- Cell numbers ------------------------------------------------------
-        with st.expander(t("🔢 Cell numbers")):
+        with st.expander(t("Cell numbers")):
             cm_font_size=st.slider(t("Font size"),6,16,11,key="cfs")
             cm_num_bold =st.toggle(t("Bold"),value=True,key="cnbd")
             _nc=st.columns(2)
@@ -650,7 +661,7 @@ with st.sidebar:
             st.caption(t("PPA/NPA are reported. Sensitivity may not be claimed when "
                        "neither method is a gold standard (CLSI EP12-A2)."))
 
-        with st.expander(t("⚖️ Cut-off values")):
+        with st.expander(t("Cut-off values")):
             st.caption(t("Fill in if the data are quantitative and need splitting into "
                        "positive/negative. Leave blank if the data are already "
                        "positive/negative."))
@@ -659,7 +670,7 @@ with st.sidebar:
             ff_cut_cand = _pa(_c[1].text_input(t("Cut-off candidate"), "", key="ff_cc"))
             st.caption(t("Positive is defined as a value ≥ the cut-off."))
 
-        with st.expander(t("🏷️ Result labels")):
+        with st.expander(t("Result labels")):
             ff_pos_label = st.text_input(t("Positive result"), "Positiv", key="ff_pl")
             ff_neg_label = st.text_input(t("Negative result"), "Negativ", key="ff_nl")
 
@@ -673,7 +684,7 @@ with st.sidebar:
 
         prec_decimals = st.slider(t("Decimal places"), 1, 6, 4, key="pr_dec")
 
-        with st.expander(t("📊 Statistical settings")):
+        with st.expander(t("Statistical settings")):
             prec_alpha = st.selectbox(t("Significance level (α)"),
                 [0.05, 0.01], index=0,
                 format_func=lambda v: f"{v:.0%}", key="pr_alpha",
@@ -682,7 +693,7 @@ with st.sidebar:
                 min_value=1, max_value=5, value=1, step=1, key="pr_q",
                 help="Bonferroni correction for testing several levels at once.")
 
-        with st.expander(t("🏭 Manufacturer claims (optional)")):
+        with st.expander(t("Manufacturer claims (optional)")):
             st.caption(t("Enter the claimed SDs to run the chi-square "
                        "verification. Leave at 0 to skip."))
             _csr=st.number_input(t("Claimed repeatability SD (σr)"),
@@ -695,7 +706,7 @@ with st.sidebar:
         prec_claimed_sl = _csl if _csl > 0 else None
 
     st.divider()
-    if st.button(t("↻ Reset all settings"), use_container_width=True,
+    if st.button(t("Reset all settings"), use_container_width=True,
                  help="Restores every option to its default. Your uploaded "
                       "file stays loaded."):
         _keep = {"lf_rb_a","lf_rb_b","lf_fname_a","lf_fname_b"}
@@ -720,8 +731,8 @@ with st.sidebar:
             _dep = "local"
 
     if _dep == "cloud":
-        st.warning(t("☁️ Web version — use anonymised or simulated data only."))
-    with st.expander(t("🔒 Data protection"), expanded=(_dep == "cloud")):
+        st.warning(t("Web version: use anonymised or simulated data only."))
+    with st.expander(t("Data protection"), expanded=(_dep == "cloud")):
         if _dep == "cloud":
             st.caption(t(
                 "This web version runs on Streamlit Community Cloud, a public "
@@ -750,7 +761,7 @@ with st.sidebar:
                 "patient. Use de-identified sample IDs and relative day "
                 "numbers instead of dates."))
 
-    with st.expander(t("📚 References")):
+    with st.expander(t("References")):
         st.caption(
             t("Passing & Bablok, *J Clin Chem Clin Biochem* 1983  \n"
             "Deming, *Statistical Adjustment of Data* 1943  \n"
@@ -758,7 +769,7 @@ with st.sidebar:
             "Bland & Altman, *Lancet* 1986  \n"
             "CLSI EP15-A3 2014 · CLSI M52 · EUCAST v10.0"))
 
-    with st.expander(t("🛈 System status")):
+    with st.expander(t("System status")):
         if not _inst_changed and not _inst_settings and _inst_version:
             st.caption(t("✓ The installation matches validated version {v}.").format(v=_inst_version))
         elif not _inst_version:
@@ -776,7 +787,11 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 method_label = ("Weighted Deming" if deming_weighted else "Deming") \
                if analysis_type=="Deming" else analysis_type
-st.title(f"{t('Method Comparison')} — {t(method_label)}")
+_landing = (analysis_type != "Precision Evaluation (EP15-A3)"
+            and _lf_mode != "Two files (match by sample ID)"
+            and input_mode == "Upload file" and uploaded_file is None)
+st.caption(t("Laboratory Medicine, Region Västmanland"))
+st.title(t("Method Comparison") if _landing else t(method_label))
 
 if _sid_err:
     st.error(f"{t('Could not read file')}: {_sid_err}")
@@ -784,46 +799,25 @@ if _sid_err:
 
 # ── Resolve data ───────────────────────────────────────────────────────────────
 def _get_data():
-    if input_mode=="📂 Upload file":
+    if input_mode=="Upload file":
         if uploaded_file is None:
             # ── Welcome / landing page ────────────────────────────────────────
+            st.markdown(t("Compare two measurement methods or instruments run on the same "
+                          "samples. Choose an analysis in the menu on the left, then upload a "
+                          "file or paste data copied from Excel."))
             st.markdown(t("""
-## Method Comparison Tool
-
-A simple tool for comparing two analytical measurement methods in clinical microbiology and clinical chemistry.
-👈 Select an analysis type in the sidebar, then upload your data or paste it directly.
+| Analysis | Use it when |
+|---|---|
+| **Passing–Bablok** | You compare two quantitative methods. Little affected by outliers and makes no assumptions about how the errors are distributed. Slope and intercept with 95 % confidence intervals. |
+| **Deming** | The measurement error of both methods is known. Weighted Deming when the CV is constant over the measuring range (Linnet 1990). Confidence intervals by jackknife. |
+| **Bland–Altman** | Shown together with both regressions: mean difference and limits of agreement. |
+| **Confusion matrix** | You compare zone diameters from two reading methods. Essential and categorical agreement, VME and ME, with EUCAST or CLSI breakpoints. |
+| **Precision** | You verify the manufacturer's repeatability and within-laboratory imprecision according to CLSI EP15-A3, normally 5 replicates on 5 days. |
+| **Fourfold table** | The results are qualitative (positive/negative). Sensitivity and specificity, or PPA and NPA when neither method is the reference. |
 """))
-
-            col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.markdown(t("""
-**📈 Passing–Bablok**
-Non-parametric regression — resistant to outliers, no assumptions about error distribution.
-Slope, intercept and 95 % confidence intervals via the rank-based method.
-"""))
-            with col_b:
-                st.markdown(t("""
-**📉 Deming regression**
-Accounts for measurement error in both methods.
-Ordinary (equal variances) or weighted (proportional CV, Linnet 1990).
-Confidence intervals via jackknife resampling.
-"""))
-            with col_c:
-                st.markdown(t("""
-**🔢 Confusion matrix**
-Zone diameter agreement grid for disk diffusion comparison.
-Essential agreement (±1/±2 mm), categorical agreement, VME and ME.
-EUCAST and CLSI breakpoints supported.
-"""))
-
-            col_d, _ = st.columns([1, 2])
-            with col_d:
-                st.markdown(t("""
-**🔬 Precision Evaluation (EP15-A3)**
-Within-run (repeatability) and within-laboratory (total) SD and CV.
-Chi-square verification against manufacturer claims.
-Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
-"""))
+            st.caption(t("Exports from two instruments with many analyses? Choose Passing–Bablok "
+                         "or Deming and two files in step 2. Samples are matched on sample ID, "
+                         "and all analyses can be compared in one run."))
 
             st.divider()
 
@@ -831,12 +825,12 @@ Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
             fc1, fc2 = st.columns([3, 2])
 
             with fc1:
-                st.markdown(t("**📄 Expected data format**"))
+                st.markdown(t("#### Data format"))
 
                 _wt1, _wt2 = st.tabs([t("Regression / Confusion matrix"), t("Precision Evaluation")])
 
                 with _wt1:
-                    st.markdown(t("At least two numeric columns — one per method. "
+                    st.markdown(t("At least two numeric columns, one per method. "
                                 "Extra columns (species, antibiotic, lab) can be used to filter rows."))
                     st.dataframe(_tdf(pd.DataFrame({
                         "Species":        ["E. coli","E. coli","K. pneumoniae","S. aureus"],
@@ -870,37 +864,37 @@ Based on CLSI EP15-A3 (2014) — 5 replicates × 5 days recommended.
                     })), use_container_width=True, hide_index=True)
 
             with fc2:
-                st.markdown(t("**📚 Key references**"))
+                st.markdown(t("#### References"))
                 st.markdown(t("""
-- Passing & Bablok, *J Clin Chem Clin Biochem* 1983 — [DOI](https://doi.org/10.1515/cclm.1983.21.11.709)
-- Linnet K, *Stat Med* 1990 — [DOI](https://doi.org/10.1002/sim.4780091210)
-- Bland & Altman, *Lancet* 1986 — [DOI](https://doi.org/10.1016/S0140-6736(86)90837-8)
-- CLSI EP15-A3, 2014 — Precision verification
-- CLSI EP09c — Method comparison & bias estimation
-- EUCAST Disk Diffusion Guide v10.0, 2023 — [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
-- CLSI M52 — Verification of AST systems
-- Chesher D, *Clin Biochem Rev* 2008 — [DOI](https://doi.org/10.3109/00365519809099610)
+- Passing H, Bablok W. *J Clin Chem Clin Biochem* 1983;21:709–20. [doi](https://doi.org/10.1515/cclm.1983.21.11.709)
+- Linnet K. *Stat Med* 1990;9:1463–73. [doi](https://doi.org/10.1002/sim.4780091210)
+- Bland JM, Altman DG. *Lancet* 1986;1:307–10. [doi](https://doi.org/10.1016/S0140-6736(86)90837-8)
+- Chesher D. *Clin Biochem Rev* 2008;29 Suppl 1:S23–6. [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC2556577/)
+- CLSI EP15-A3. User verification of precision and estimation of bias. 2014.
+- CLSI EP09c. Measurement procedure comparison and bias estimation using patient samples. 2018.
+- CLSI M52. Verification of commercial microbial identification and AST systems. 2015.
+- EUCAST. Disk diffusion method for antimicrobial susceptibility testing, v10.0. [eucast.org](https://www.eucast.org/ast_of_bacteria/disk_diffusion_methodology/)
 """))
             return None, None
 
         if _x_sid is None or _y_sid is None:
-            st.info(t("👈 Select the columns to use in the sidebar."))
+            st.info(t("Select the columns to use in the sidebar."))
             return None,None
         return _x_sid, _y_sid
     else:
         if not pasted_text or not pasted_text.strip():
-            st.info(t("👈 Paste your data in the sidebar to get started."))
+            st.info(t("Paste your data in the sidebar to get started."))
             return None,None
         try:
             _df=parse_pasted(pasted_text)
-            st.success(t("✅ Parsed {n} rows.").format(n=len(_df)))
+            st.success(t("Parsed {n} rows.").format(n=len(_df)))
             return _df["reference"].values, _df["candidate"].values
         except ValueError as e:
             st.error(t(str(e))); return None,None
 
 if analysis_type == "Precision Evaluation (EP15-A3)":
     x_raw = y_raw = np.array([1.0, 2.0])  # dummy — precision has its own input
-elif _lf_mode == "Two long-format files (match by ID)":
+elif _lf_mode == "Two files (match by sample ID)":
     if _sid_err:
         st.error(f"{t('Could not match files')}: {_sid_err}")
         st.stop()
@@ -908,10 +902,10 @@ elif _lf_mode == "Two long-format files (match by ID)":
         overview_panel(t, _lf_ctx, "Deming" if analysis_type == "Deming" else "Passing–Bablok",
                        error_ratio, deming_weighted, decimals, stamp(), _tdf)
     if _lf_x_arr is None or len(_lf_x_arr) == 0:
-        st.info(t("👈 Upload both files and configure the column mapping in the sidebar."))
+        st.info(t("Upload both files and configure the column mapping in the sidebar."))
         st.stop()
     if len(_lf_x_arr) < 3:
-        st.error(t("Only {n} matched pair(s) — need at least 3 for regression.").format(n=len(_lf_x_arr)))
+        st.error(t("Only {n} matched pair(s). At least 3 are needed for regression.").format(n=len(_lf_x_arr)))
         st.stop()
     x_raw  = _lf_x_arr
     y_raw  = _lf_y_arr
@@ -937,7 +931,7 @@ if analysis_type != "Precision Evaluation (EP15-A3)":
 if analysis_type in ("Passing–Bablok","Deming"):
 
     # ── Analyze: store the FULL dataset; exclusions are applied afterwards ────
-    if st.button(t("▶ Analyze"), type="primary"):
+    if st.button(t("Analyze"), type="primary"):
         st.session_state["x_all"]      = x_raw.copy()
         st.session_state["y_all"]      = y_raw.copy()
         st.session_state["reg_method"] = method_label
@@ -945,7 +939,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.session_state["reg_ready"]  = True
 
     if not st.session_state.get("reg_ready"):
-        st.info(t("👆 Click **Analyze** to run the regression."))
+        st.info(t("Click **Analyze** to run the regression."))
         st.stop()
 
     _x_all = st.session_state["x_all"]
@@ -963,9 +957,9 @@ if analysis_type in ("Passing–Bablok","Deming"):
     _kept = [i for i in range(_n_all) if i not in _excl]
 
     if len(_kept) < 3:
-        st.error(f"Only {len(_kept)} point(s) remain — need at least 3. "
-                 "Restore some points below.")
-        if st.button(t("↺ Restore all points"), key="restore_all_err"):
+        st.error(t("Only {n} point(s) remain. At least 3 are needed, so restore some "
+                   "points below.").format(n=len(_kept)))
+        if st.button(t("Restore all points"), key="restore_all_err"):
             st.session_state["excl_multi"] = []
             st.rerun()
         st.stop()
@@ -988,17 +982,17 @@ if analysis_type in ("Passing–Bablok","Deming"):
             st.session_state["stats"]   = summary_stats(_x,_y)
             st.session_state["reg_sig"] = _sig
         except ValueError as e:
-            st.error(f"Analysis failed: {e}")
+            st.error(t("Analysis failed: {e}").format(e=e))
             st.stop()
 
     rr=st.session_state["reg_res"]
     ss=st.session_state["stats"]
 
     if _excl:
-        st.info(f"**{len(_excl)} point(s) excluded** — "
-                f"statistics and both plots use the remaining {len(_kept)} of {_n_all}.")
+        st.info(t("**{n} point(s) excluded.** Statistics and both plots use the remaining "
+                  "{k} of {N}.").format(n=len(_excl), k=len(_kept), N=_n_all))
 
-    st.subheader(f"{t('Results')} — {t(st.session_state.get('reg_method', method_label))}")
+    st.subheader(f"{t('Results')}: {t(st.session_state.get('reg_method', method_label))}")
     st.dataframe(_tdf(pd.DataFrame([
         {"Statistic":"Slope","Value":fmt(rr["slope"],decimals),
          "95% CI":f"[{fmt(rr['slope_lower'],decimals)} – {fmt(rr['slope_upper'],decimals)}]"},
@@ -1067,7 +1061,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
     _fig_pb_live = make_regression_plot(_x,_y,**_pkw)
     _fig_ba_live = make_bland_altman_plot(_x,_y,**_bkw)
 
-    st.caption(t("💡 Click a point, or drag a box/lasso, to exclude it from both "
+    st.caption(t("Click a point, or drag a box/lasso, to exclude it from both "
                "plots and all statistics."))
 
     with _cp:
@@ -1090,7 +1084,7 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.rerun()
 
     # ── Manual exclusion list (fallback + undo) ───────────────────────────────
-    with st.expander(t("🗑 Excluded points ({n})").format(n=len(_excl)), expanded=bool(_excl)):
+    with st.expander(t("Excluded points ({n})").format(n=len(_excl)), expanded=bool(_excl)):
         _opts = list(range(_n_all))
         def _lbl(i):
             return f"#{i+1}:  {fmt(float(_x_all[i]),decimals)} / {fmt(float(_y_all[i]),decimals)}"
@@ -1106,14 +1100,15 @@ if analysis_type in ("Passing–Bablok","Deming"):
         def _restore_all():
             st.session_state["excl_multi"] = []
         if _excl:
-            st.button(t("↺ Restore all points"), key="restore_all", on_click=_restore_all)
+            st.button(t("Restore all points"), key="restore_all", on_click=_restore_all)
 
     st.subheader(t("Export"))
-    with st.expander(t("⚙️ Image resolution"),expanded=True):
+    with st.expander(t("Image resolution"),expanded=True):
         _dl=st.selectbox(t("Resolution"),DPI_LABELS,index=1,key="rdpi")
         _dp=dpi_from_label(_dl)
         _iw=int(180/25.4*_dp); _ih=int(130/25.4*_dp)
-        st.caption(f"Auto: **{_iw}×{_ih} px** at **{_dp} dpi** ≈ 18×13 cm.")
+        st.caption(t("Automatic size: **{w}×{h} px** at **{d} dpi**, about 18 × 13 cm.").format(
+            w=_iw, h=_ih, d=_dp))
 
     fig_pb=make_regression_plot(_x,_y,**_pkw)
     fig_ba=make_bland_altman_plot(_x,_y,**_bkw)
@@ -1124,10 +1119,10 @@ if analysis_type in ("Passing–Bablok","Deming"):
     ]:
         st.markdown(f"**{t(_lbl)}**")
         _e1,_e2,_=st.columns([1,1,2])
-        _e1.download_button(f"🖼 PNG ({_dp} dpi)",
+        _e1.download_button(f"PNG ({_dp} dpi)",
             mpl_fig_to_png_bytes(_rfn(_x,_y,dpi=_dp,width_px=_iw,height_px=_ih,**_kw),dpi=_dp),
             f"{_slg}_{_dp}dpi.png","image/png",key=f"png_{_slg}")
-        _e2.download_button(t("📐 SVG"),
+        _e2.download_button(t("SVG"),
             mpl_fig_to_svg_bytes(_rfn(_x,_y,dpi=_dp,width_px=_iw,height_px=_ih,**_kw)),
             f"{_slg}.svg","image/svg+xml",key=f"svg_{_slg}")
 
@@ -1140,14 +1135,14 @@ if analysis_type in ("Passing–Bablok","Deming"):
     if _excl:
         _csv_txt += ("Excluded point numbers,"
                      + " ".join(str(i+1) for i in sorted(_excl)) + "\n")
-    _f1.download_button(t("📥 Results CSV"), text_to_csv_bytes(_csv_txt),
+    _f1.download_button(t("Results CSV"), text_to_csv_bytes(_csv_txt),
                         "results.csv", "text/csv", key="rcsv")
-    _f2.download_button(t("📄 HTML Report"),
+    _f2.download_button(t("HTML Report"),
         build_html_report(rr,ss,fig_pb,fig_ba,x_label=x_label,y_label=y_label),
         "report.html","text/html",key="rhtml")
 
     # ── Matched pairs Excel — rebuilt here so it reflects exclusions ──────────
-    if _lf_mode=="Two long-format files (match by ID)" and _lf_report_df is not None:
+    if _lf_mode=="Two files (match by sample ID)" and _lf_report_df is not None:
         _rep_out = _lf_report_df.copy()
         _rep_out["Status"] = ""
         # Matched rows, after dropping NaN pairs, line up positionally with
@@ -1171,16 +1166,16 @@ if analysis_type in ("Passing–Bablok","Deming"):
         st.markdown(t("**Matched pairs data**"))
         _fx1,_fx2,_=st.columns([1,1,2])
         _fx1.download_button(
-            t("📊 Download matched pairs (Excel)"),
+            t("Download matched pairs (Excel)"),
             _xlsx_out,
             f"matched_pairs_{_lf_analyte}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="lf_dl_xlsx",
         )
         _fx2.caption(
-            f"Analyte: **{_lf_analyte}** — Sheet 1 matched pairs with "
-            f"Included/Excluded status, Sheet 2 only in {_lf_label_a}, "
-            f"Sheet 3 only in {_lf_label_b}"
+            t("Analyte: **{a}**. Sheet 1: matched pairs marked as included or excluded. "
+              "Sheet 2: only in {la}. Sheet 3: only in {lb}.").format(
+                a=_lf_analyte, la=_lf_label_a, lb=_lf_label_b)
         )
 
 
@@ -1194,14 +1189,14 @@ elif analysis_type == "Confusion Matrix":
             x_raw,y_raw,step=int(cm_step),
             x_min=cm_x_min,x_max=cm_x_max,y_min=cm_y_min,y_max=cm_y_max)
     except Exception as e:
-        st.error(f"Could not build matrix: {e}"); st.stop()
+        st.error(t("Could not build the matrix: {e}").format(e=e)); st.stop()
 
     ea=essential_agreement(x_raw,y_raw)
     ca=categorical_agreement(x_raw,y_raw,
                              s_breakpoint_x=bp_s_x,r_breakpoint_x=bp_r_x,
                              s_breakpoint_y=bp_s_y,r_breakpoint_y=bp_r_y)
 
-    st.markdown(f"**{bp_system}** — "
+    st.markdown(f"**{bp_system}**: "
                 f"{x_label}: S≥{bp_s_x:.1f}/R≤{bp_r_x:.1f} mm | "
                 f"{y_label}: S≥{bp_s_y:.1f}/R≤{bp_r_y:.1f} mm")
 
@@ -1222,7 +1217,7 @@ elif analysis_type == "Confusion Matrix":
     if ca["n_minor"]>0:
         st.caption(t("Minor errors: {n} ({p} %)").format(n=ca['n_minor'], p=fmt(ca['minor_e'], 1)))
 
-    with st.expander(t("ℹ️ Acceptability thresholds")):
+    with st.expander(t("Acceptability thresholds")):
         st.markdown(t("""
 | Metric | EUCAST | CLSI |
 |---|---|---|
@@ -1246,15 +1241,16 @@ elif analysis_type == "Confusion Matrix":
                     use_container_width=True)
 
     st.subheader(t("Export matrix"))
-    with st.expander(t("⚙️ Export resolution"),expanded=True):
+    with st.expander(t("Export resolution"),expanded=True):
         _cdl=st.selectbox(t("Resolution"),DPI_LABELS,index=1,key="cdpi")
         _cdp=dpi_from_label(_cdl)
         _nb=len(x_bins)
         _cw=int((_nb*6/25.4+28/25.4*2)*_cdp)
-        st.caption(f"Auto: **{_cw}×{_cw} px** at **{_cdp} dpi** — each cell=6 mm printed.")
+        st.caption(t("Automatic size: **{w}×{w} px** at **{d} dpi**, each cell 6 mm when "
+                     "printed.").format(w=_cw, d=_cdp))
 
     _d1,_d2,_=st.columns([1,1,2])
-    _d1.download_button(f"🖼 PNG ({_cdp} dpi)",
+    _d1.download_button(f"PNG ({_cdp} dpi)",
         render_confusion_png(matrix,x_bins,y_bins,dpi=_cdp,**_ckw),
         f"confusion_{_cdp}dpi.png","image/png",key="cpng")
 
@@ -1262,7 +1258,7 @@ elif analysis_type == "Confusion Matrix":
                       index=[str(int(b)) for b in y_bins],
                       columns=[str(int(b)) for b in x_bins])
     _mdf.index.name=f"{y_label}\\{x_label}"
-    _d2.download_button(t("📥 Matrix CSV"),
+    _d2.download_button(t("Matrix CSV"),
                         to_csv_bytes(_mdf, index=True),
                         "confusion_matrix.csv","text/csv",key="ccsv")
 
@@ -1272,7 +1268,7 @@ elif analysis_type == "Confusion Matrix":
 # ══════════════════════════════════════════════════════════════════════════════
 elif analysis_type == "Fourfold table (qualitative)":
 
-    st.subheader(t("Fourfold table") + (f" — {ff_analyte}" if ff_analyte else ""))
+    st.subheader(t("Fourfold table") + (f": {ff_analyte}" if ff_analyte else ""))
 
     # Data kan vara redan binära eller kvantitativa med beslutsgräns
     _need_cut = (ff_cut_ref is None or ff_cut_cand is None)
@@ -1361,26 +1357,26 @@ elif analysis_type == "Fourfold table (qualitative)":
         use_container_width=True, hide_index=True)
 
     if _warn:
-        with st.expander(f'{t("⚠️ Points to consider")} ({len(_warn)})', expanded=True):
+        with st.expander(f'{t("Points to consider")} ({len(_warn)})', expanded=True):
             for _w in _warn:
                 st.caption("• " + _w)
 
-    with st.expander(t("ℹ️ Interpretation")):
+    with st.expander(t("Interpretation")):
         st.markdown(t("""
-**Which measures apply** — if neither method can be considered a gold
+**Which measures apply.** If neither method can be considered a gold
 standard, sensitivity and specificity may not be claimed. Positive and
 negative percent agreement (PPA/NPA) are reported instead. This is the
 explicit recommendation of CLSI EP12-A2 and the FDA.
 
-**Confidence intervals** — calculated with the Wilson score method, which
+**Confidence intervals** are calculated with the Wilson score method, which
 gives sensible limits even at 0 % and 100 % where the ordinary method
 fails. The width reflects how many samples were included, not how good
 the method is.
 
-**Cohen's kappa** — agreement corrected for that which arises by chance
+**Cohen's kappa** measures agreement corrected for that which arises by chance
 alone. The interpretation thresholds are arbitrary conventions.
 
-**McNemar test** — tests whether the disagreements are systematically
+**McNemar's test** checks whether the disagreements are systematically
 skewed, that is whether one method more often gives a positive result
 than the other. Only the discordant cells contribute. A low p-value means
 a systematic difference, not necessarily a clinically important one.
@@ -1398,7 +1394,7 @@ prevalence.
         pos_label=ff_pos_label, neg_label=ff_neg_label, warnings=_warn, t=t)
     _e1,_e2,_ = st.columns([1,1,2])
     _e1.download_button(
-        t("📊 Download fourfold table (Excel)"), _ff_xl,
+        t("Download fourfold table (Excel)"), _ff_xl,
         f"fyrfaltstabell{('_'+ff_analyte.replace(' ','_')) if ff_analyte else ''}.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="ff_xl")
@@ -1413,7 +1409,7 @@ prevalence.
         ["McNemar p", fmt(_ff["mcnemar_p"],4)],
     ]
     _e2.download_button(
-        t("📥 Results (CSV)"),
+        t("Results (CSV)"),
         to_csv_bytes(pd.DataFrame(_ff_rows, columns=["Mått","Värde"])),
         "fyrfaltstabell.csv", "text/csv", key="ff_csv")
 
@@ -1422,12 +1418,12 @@ prevalence.
 # BRANCH C — Precision Evaluation (EP15-A3)
 # ══════════════════════════════════════════════════════════════════════════════
 else:
-    st.subheader(t("Precision Evaluation — CLSI EP15-A3"))
+    st.subheader(t("Precision evaluation according to CLSI EP15-A3"))
 
     _pr_tab1, _pr_tab2, _pr_tab3 = st.tabs([
-        t("📂 Wide format (columns = days)"),
-        t("📋 Paste wide format"),
-        t("🔍 Long format (search by Sample ID)"),
+        t("Wide format (columns = days)"),
+        t("Paste wide format"),
+        t("Long format (search by Sample ID)"),
     ])
 
     _pr_data_dict = None
@@ -1446,12 +1442,12 @@ else:
                     _pr_df = pd.read_csv(BytesIO(_pr_rb), sep=None, engine="python")
                 _pr_df.columns = [f"Column {i+1}" if str(c).strip().lstrip("-").isdigit()
                                    else str(c) for i,c in enumerate(_pr_df.columns)]
-                st.caption(t("Preview — {r} replicates × {d} days (all rows shown):")
+                st.caption(t("Preview: {r} replicates × {d} days (all rows shown):")
                            .format(r=len(_pr_df), d=len(_pr_df.columns)))
                 st.dataframe(_pr_df, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df)
             except Exception as _e:
-                st.error(f"Could not read file: {_e}")
+                st.error(f"{t('Could not read file')}: {_e}")
 
     with _pr_tab2:
         st.markdown(t("Copy from Excel (columns = days) and paste below."))
@@ -1465,12 +1461,12 @@ else:
                 if _pr_df2.shape[1] < 2:
                     _pr_df2 = pd.read_csv(_SIO(_pr_paste), sep="\t")
                 _pr_df2.columns = [str(c) for c in _pr_df2.columns]
-                st.caption(t("Preview — {r} replicates × {d} days (all rows shown):")
+                st.caption(t("Preview: {r} replicates × {d} days (all rows shown):")
                            .format(r=len(_pr_df2), d=len(_pr_df2.columns)))
                 st.dataframe(_pr_df2, use_container_width=True)
                 _pr_data_dict = precision_from_dataframe(_pr_df2)
             except Exception as _e:
-                st.error(f"Could not parse: {_e}")
+                st.error(t("Could not interpret the data: {e}").format(e=_e))
 
     with _pr_tab3:
         st.markdown(
@@ -1489,7 +1485,7 @@ else:
                 _lf_pr_df  = load_long_format(_lf_pr_rb, _lf_pr_file.name,
                                               has_header=_pr_has_hdr)
                 if not _pr_has_hdr:
-                    st.caption(t("Columns named Column 1, Column 2 … — first row kept as data."))
+                    st.caption(t("Columns are named Column 1, Column 2 and so on. The first row is kept as data."))
                 _lf_pr_cols= list(_lf_pr_df.columns)
                 _lfc=st.columns(3)
                 _lf_pr_id_col  =_lfc[0].selectbox(t("Sample ID column"),_lf_pr_cols,key="lf_pr_id")
@@ -1513,9 +1509,9 @@ else:
                     t("How are days defined?"),
                     ["Group by a date / day column", "Split every N results"],
                     key="lf_pr_grpmode",
-                    help="If your file has a Date column, grouping by it is "
-                         "safer — the number of replicates per day can differ "
-                         "between analytes.", format_func=t)
+                    help=t("If your file has a date column, grouping by it is safer, because "
+                           "the number of replicates per day can differ between "
+                           "analytes."), format_func=t)
                 _lf_pr_group = None
                 _lf_pr_n = 5
                 if _pr_grp_mode == "Group by a date / day column":
@@ -1533,7 +1529,7 @@ else:
                 _prev_mask=_lf_pr_df[_lf_pr_id_col].astype(str)==_prlf_sample_id
                 if _lf_pr_analyte and _lf_pr_an_col != "N/A":
                     _prev_mask&=_lf_pr_df[_lf_pr_an_col].astype(str)==_lf_pr_analyte
-                st.caption(t("Preview — {n} rows for this sample:").format(n=int(_prev_mask.sum())))
+                st.caption(t("Preview: {n} rows for this sample:").format(n=int(_prev_mask.sum())))
                 st.dataframe(_lf_pr_df[_prev_mask].head(10),use_container_width=True)
                 _prlf_dd,_prlf_raw_df,_prlf_nl=extract_precision_replicates(
                     _lf_pr_df,_lf_pr_id_col,_lf_pr_res_col,_prlf_sample_id,
@@ -1546,14 +1542,14 @@ else:
                 _pr_data_dict=_prlf_dd
                 _nrep = len(next(iter(_prlf_dd.values())))
                 if _prlf_nl > 0 and _lf_pr_group:
-                    st.warning(t("⚠️ {n} result(s) not used: the calculation requires the "
+                    st.warning(t("{n} result(s) not used: the calculation requires the "
                                  "same number of replicates every day, so each day was "
                                  "limited to its first {m} results. They are marked in "
                                  "the raw data.").format(n=_prlf_nl, m=_nrep))
                 elif _prlf_nl > 0:
-                    st.warning(t("⚠️ {n} trailing result(s) excluded (incomplete day).")
+                    st.warning(t("{n} trailing result(s) excluded (incomplete day).")
                                .format(n=_prlf_nl))
-                st.success(t("✅ {d} days × {r} replicates ready.").format(
+                st.success(t("{d} days × {r} replicates ready.").format(
                     d=len(_prlf_dd), r=_nrep))
             except Exception as _e:
                 st.error(f"{t('Error')}: {_e}")
@@ -1586,7 +1582,7 @@ else:
             claimed_sl=prec_claimed_sl,
         )
     except Exception as e:
-        st.error(f"Precision calculation failed: {e}"); st.stop()
+        st.error(t("The precision calculation failed: {e}").format(e=e)); st.stop()
 
     def _pf(v): return f"{v:.{prec_decimals}f}".replace(".", ",")
 
@@ -1636,7 +1632,7 @@ else:
               "(s²day = {a}) is smaller than what within-run noise alone "
               "would produce (S²r/n = {b}), so the negative variance "
               "component is truncated to zero (CLSI EP15-A3). It usually "
-              "means there is no detectable day-to-day effect — check that "
+              "means there is no detectable day-to-day effect. Check that "
               "your days are grouped correctly.")
             .format(a=f"{_pr['s_day2']:.6g}",
                     b=f"{_pr['sr2']/_pr['n']:.6g}"))
@@ -1655,12 +1651,12 @@ CV = {cv} %</p>
 df = {df} &nbsp;|&nbsp; {o}</p>
 </div>
 """.format(cv=_pf(_pr["pooled_cv"]), sd=_pf(_pr["pooled_sd"]), df=_pr["pooled_df"],
-           h=t("TOTAL IMPRECISION — SIMPLE POOLED CALCULATION "
+           h=t("TOTAL IMPRECISION, SIMPLE POOLED CALCULATION "
                "(all {nm} results as one set)").format(nm=_pr["n_total_meas"]),
            o=t("ordinary SD of every measurement, day structure ignored")),
         unsafe_allow_html=True)
 
-    with st.expander(t("ℹ️ Why does this differ from the CLSI value?")):
+    with st.expander(t("Why does this differ from the CLSI value?")):
         st.markdown(t("""
 The **CLSI within-laboratory SD** separates the data into a within-run and a
 between-day component and adds them on the variance scale
@@ -1712,7 +1708,7 @@ comparison with sources that use the simplified approach.
                .format(n=_pr['n_total_meas'], D=_pr['D'], r=_pr['n']))
 
     # ── Full breakdown table ──────────────────────────────────────────────────
-    with st.expander(t("📊 Full variance component breakdown"), expanded=False):
+    with st.expander(t("Full variance component breakdown"), expanded=False):
         st.dataframe(_tdf(pd.DataFrame([
             {"Component": "Within-run (Sᵣ)",
              "SD":     _pf(_pr["sr"]),
@@ -1748,7 +1744,7 @@ comparison with sources that use the simplified approach.
                 "Claimed SD":        _pf(prec_claimed_sr),
                 "Observed SD":       _pf(_pr["sr"]),
                 "Verification value":_pf(_pr["verif_sr"]),
-                "Verdict":           "✅  PASS" if _pr["pass_sr"] else "❌  FAIL",
+                "Verdict":           "Pass" if _pr["pass_sr"] else "Fail",
             })
         if prec_claimed_sl is not None:
             _vrows.append({
@@ -1756,12 +1752,12 @@ comparison with sources that use the simplified approach.
                 "Claimed SD":        _pf(prec_claimed_sl),
                 "Observed SD":       _pf(_pr["sl"]),
                 "Verification value":_pf(_pr["verif_sl"]),
-                "Verdict":           "✅  PASS" if _pr["pass_sl"] else "❌  FAIL",
+                "Verdict":           "Pass" if _pr["pass_sl"] else "Fail",
             })
         st.dataframe(_tdf(pd.DataFrame(_vrows)), use_container_width=True, hide_index=True)
 
     # ── Per-day summary ───────────────────────────────────────────────────────
-    with st.expander(t("📋 Per-day summary")):
+    with st.expander(t("Per-day summary")):
         _day_df = pd.DataFrame(_pr["day_summary"])
         for _col in ["Mean","SD","CV (%)","Min","Max"]:
             _day_df[_col] = _day_df[_col].map(_pf)
@@ -1770,7 +1766,7 @@ comparison with sources that use the simplified approach.
     # ── Outliers ──────────────────────────────────────────────────────────────
     if _pr["outliers"]:
         st.warning(
-            f"⚠️ {len(_pr['outliers'])} potential outlier(s) detected "
+            f"{len(_pr['outliers'])} potential outlier(s) detected "
             "(|deviation| > 3.5 × Sᵣ). Investigate before accepting results.")
         _ol_df = pd.DataFrame(_pr["outliers"])
         _ol_df["Deviation / Sᵣ"] = _ol_df["Deviation / Sr"].map(lambda v: f"{v:.2f}")
@@ -1818,14 +1814,14 @@ comparison with sources that use the simplified approach.
     ]
     if prec_claimed_sr is not None:
         _footer.append({
-            "Day": t("Manufacturer claim — repeatability") + "ᶜ",
+            "Day": t("Manufacturer claim: repeatability") + "ᶜ",
             **{f"Rep {i+1}": "" for i in range(_n_reps)},
             "Mean": "", "SD": _pf(prec_claimed_sr),
             "CV (%)": "Pass" if _pr["pass_sr"] else "Fail",
         })
     if prec_claimed_sl is not None:
         _footer.append({
-            "Day": t("Manufacturer claim — within-laboratory") + "ᶜ",
+            "Day": t("Manufacturer claim: within-laboratory") + "ᶜ",
             **{f"Rep {i+1}": "" for i in range(_n_reps)},
             "Mean": "", "SD": _pf(prec_claimed_sl),
             "CV (%)": "Pass" if _pr["pass_sl"] else "Fail",
@@ -1856,7 +1852,7 @@ comparison with sources that use the simplified approach.
             .format(a=f"{float(prec_alpha):.0%}", q=prec_n_levels))
 
     # Preview in app
-    st.caption(t("Journal-style precision table — days as rows, replicates as columns, "
+    st.caption(t("Journal-style precision table: days as rows, replicates as columns, "
                "precision summary in footer:"))
     st.dataframe(_tdf(_full_jdf.set_index("Day")), use_container_width=True)
 
@@ -1873,7 +1869,7 @@ comparison with sources that use the simplified approach.
     _dl_df = _tdf(_dl_df)          # download follows the interface language
 
     st.download_button(
-        t("📥 Download journal table (CSV)"),
+        t("Download journal table (CSV)"),
         to_csv_bytes(_dl_df, index=True),
         "precision_journal_table.csv",
         "text/csv",
@@ -1895,11 +1891,11 @@ comparison with sources that use the simplified approach.
             t=t,
         )
         st.download_button(
-            t("📊 Download Excel (raw data + summary)"),
+            t("Download Excel (raw data + summary)"),
             _pr_xlsx,
             "precision_results.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="pr_xl",
         )
     except Exception as _e:
-        st.caption(f"Excel export unavailable: {_e}")
+        st.caption(t("Excel export is not available: {e}").format(e=_e))

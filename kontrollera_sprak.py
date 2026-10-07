@@ -47,7 +47,8 @@ ALLOWED = {
 
 
 CITATION = ("J Clin Chem", "Lancet", "Stat Med", "Clin Biochem Rev")
-EN_OK_WITH_SWEDISH = {"Svenska", "Språk / Language"}
+EN_OK_WITH_SWEDISH = {"Svenska", "Språk / Language",
+                      "Laboratory Medicine, Region Västmanland"}   # ortnamn
 
 
 def looks_swedish(s):
@@ -116,7 +117,7 @@ def run(analysis, setup=None, lang="sv"):
 
 
 def paste(at):
-    at.radio(key="imode").set_value("📋 Paste data").run()
+    at.radio(key="imode").set_value("Paste data").run()
     at.text_area(key="pa").input(PASTE).run()
 
 
