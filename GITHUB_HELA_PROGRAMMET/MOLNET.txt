@@ -1,0 +1,84 @@
+===================================================================
+ STREAMLIT CLOUD - UTVECKLINGSVERSION
+===================================================================
+
+Denna fil beskriver hur programmet koras pa Streamlit Cloud under
+utvecklingsfasen.
+
+
+VIKTIGT
+-------
+Streamlit Cloud ar en publik tjanst som drivs av ett foretag i USA.
+
+   Ladda ALDRIG upp patientidentifierbara uppgifter dit.
+
+Anvand i stallet:
+   - simulerade data
+   - kontrollmaterial (QC)
+   - avidentifierade filer utan datum och utan riktiga prov-ID
+
+Nar produkten ar fardig: ga over till lokal drift (se
+LAS DETTA FORST.txt och BYGGA_APP.txt).
+
+
+PUBLICERA EN NY VERSION
+-----------------------
+1. Lagg upp koden pa GitHub
+2. Ga till share.streamlit.io
+3. Peka ut repot och filen  app.py
+4. Deploy
+
+Streamlit installerar automatiskt allt i requirements.txt.
+
+
+LOSENORDSSKYDD PA MOLNET
+------------------------
+Ladda inte upp secrets.toml till GitHub. Gor sa har i stallet:
+
+1. Oppna appen pa share.streamlit.io
+2. Klicka Settings -> Secrets
+3. Skriv in:
+
+       password = "valj-ett-losenord"
+
+4. Save. Appen startar om och kraver nu losenord.
+
+Utan detta ar appen oppen for vem som helst som har adressen.
+
+
+HALLA APPEN VAKEN
+-----------------
+Gratisversionen somnar efter cirka 12 timmars inaktivitet.
+Mappen .github innehaller en automatik som vacker appen var
+sjatte timme.
+
+For att aktivera den:
+1. Ga till ditt GitHub-repo
+2. Settings -> Secrets and variables -> Actions -> fliken Variables
+3. New repository variable
+      Namn:  STREAMLIT_URL
+      Varde: hela adressen till appen, t.ex.
+             https://dittnamn-metodjamforelse.streamlit.app
+4. Ga till fliken Actions och kor "Keep Streamlit App Awake"
+   en gang manuellt for att testa
+
+
+KONFIGURATION
+-------------
+Filen .streamlit/config.toml fungerar bade lokalt och i molnet.
+
+   server.address star medvetet INTE i config.toml.
+   I molnet maste appen lyssna pa alla granssnitt i containern.
+   Lokalt lases den till localhost av STARTA.bat i stallet.
+
+   Andra inte detta utan att forsta konsekvensen.
+
+
+NAR NI GAR OVER TILL LOKAL DRIFT
+--------------------------------
+1. Ta bort appen fran share.streamlit.io
+2. Ta bort mappen .github (behovs bara i molnet)
+3. Folj BYGGA_APP.txt for att bygga den portabla versionen
+4. Signera valideringsrapporten
+
+===================================================================
